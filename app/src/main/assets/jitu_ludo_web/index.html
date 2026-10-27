@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Jitu Ludo</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at 50% 20%, #3e2316 0%, #241209 50%, #140804 100%);
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    header {
+      width: 100%;
+      max-width: 460px;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #26130c;
+      border-bottom: 1.5px solid #4a2818;
+    }
+    header h1 {
+      font-size: 1.25rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      background: linear-gradient(135deg, #f59e0b, #ef4444);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .badge {
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #3b82f6;
+      font-weight: 700;
+      color: white;
+    }
+    .btn-icon {
+      background: #312e81;
+      border: none;
+      color: white;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+    #game-container {
+      width: 100%;
+      max-width: 440px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    #status-card {
+      width: 100%;
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-left: 4px solid #f59e0b;
+    }
+    #players-bar {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+      gap: 6px;
+    }
+    .player-card {
+      background: #1e293b;
+      border-radius: 10px;
+      padding: 6px 4px;
+      text-align: center;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .player-card.active {
+      transform: scale(1.03);
+    }
+    .player-name {
+      font-size: 0.75rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .player-tokens-dots {
+      display: flex;
+      justify-content: center;
+      gap: 3px;
+      margin-top: 4px;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #64748b;
+    }
+    .dot.home { background: #f59e0b; }
+    .dot.active { background: #22c55e; }
+
+    #board-wrapper {
+      width: 100%;
+      max-width: 420px;
+      aspect-ratio: 1;
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      background: #fff;
+    }
+    #capture-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    .capture-badge {
+      background: rgba(24, 24, 27, 0.95);
+      border: 2px solid #f59e0b;
+      border-radius: 16px;
+      padding: 10px 16px;
+      text-align: center;
+      color: #fff;
+      animation: popBounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+    }
+    @keyframes popBounce {
+      0% { transform: scale(0.3); opacity: 0; }
+      70% { transform: scale(1.15); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    canvas#ludo-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: pointer;
+    }
+
+    #controls-card {
+      width: 100%;
+      background: #1e293b;
+      border-radius: 16px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .current-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .avatar-circle {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 1.1rem;
+      color: white;
+    }
+    .dice-die {
+      width: 52px;
+      height: 52px;
+      background: #f8fafc;
+      border: 3px solid #3b82f6;
+      border-radius: 12px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      padding: 5px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      transition: transform 0.2s;
+    }
+    .dice-die:active { transform: scale(0.92); }
+    .dice-die.rolling {
+      animation: spin 0.4s linear infinite;
+    }
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+    .pip {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #0f172a;
+      place-self: center;
+    }
+    .pip.red { background: #dc2626; }
+
+    .btn-roll {
+      background: #16a34a;
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    .btn-roll:disabled {
+      background: #475569;
+      cursor: not-allowed;
+    }
+
+    /* Modal */
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 16px;
+    }
+    .modal.hidden { display: none; }
+    .modal-content {
+      background: #1e293b;
+      border-radius: 20px;
+      padding: 24px;
+      width: 100%;
+      max-width: 360px;
+      text-align: center;
+    }
+    .modal-content h2 { margin-bottom: 12px; font-weight: 900; }
+    .form-group {
+      text-align: left;
+      margin-bottom: 14px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+    .btn-group {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-group button {
+      flex: 1;
+      padding: 10px 0;
+      background: #334155;
+      border: 2px solid transparent;
+      border-radius: 10px;
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-group button.active {
+      background: #3b82f6;
+      border-color: #60a5fa;
+    }
+    .btn-start {
+      width: 100%;
+      padding: 14px;
+      background: #16a34a;
+      border: none;
+      border-radius: 12px;
+      color: white;
+      font-weight: 800;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>JITU LUDO</h1>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <span id="mode-badge" class="badge">Pass & Play</span>
+      <button id="btn-sound" class="btn-icon" title="Toggle Sound">🔊</button>
+      <button id="btn-stats" class="btn-icon" title="Statistics">📊</button>
+      <button id="btn-menu" class="btn-icon" title="New Game">⚙️</button>
+      <button id="btn-rules" class="btn-icon" title="Rules">❓</button>
+    </div>
+  </header>
+
+  <main id="game-container">
+    <div id="status-card">
+      <span id="status-icon">🎲</span>
+      <span id="status-text">Welcome to Jitu Ludo! Roll to start.</span>
+    </div>
+
+    <div id="players-bar"></div>
+
+    <div id="board-wrapper">
+      <canvas id="ludo-canvas" width="600" height="600"></canvas>
+      <div id="capture-overlay"></div>
+    </div>
+
+    <div id="controls-card">
+      <div class="current-info">
+        <div id="current-avatar" class="avatar-circle" style="background:#dc2626;">R</div>
+        <div>
+          <div id="current-name" style="font-weight:800; font-size:1rem;">Red Player</div>
+          <div id="current-hint" style="font-size:0.75rem; color:#94a3b8;">Your turn to roll!</div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div id="dice-btn" class="dice-die"></div>
+        <button id="roll-action-btn" class="btn-roll">ROLL</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- New Game / Setup Modal -->
+  <div id="setup-modal" class="modal">
+    <div class="modal-content">
+      <h2>🎮 Game Setup</h2>
+      
+      <div class="form-group">
+        <label>GAME MODE</label>
+        <div class="btn-group" id="mode-buttons">
+          <button data-mode="LOCAL" class="active">Pass & Play</button>
+          <button data-mode="BOT">vs Computer</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>PLAYER COUNT</label>
+        <div class="btn-group" id="count-buttons">
+          <button data-count="2" class="active">2 Players</button>
+          <button data-count="3">3 Players</button>
+          <button data-count="4">4 Players</button>
+        </div>
+      </div>
+
+      <button id="btn-start-game" class="btn-start">START MATCH</button>
+    </div>
+  </div>
+
+  <!-- Rules Modal -->
+  <div id="rules-modal" class="modal hidden">
+    <div class="modal-content" style="text-align:left;">
+      <h2 style="text-align:center;">📜 Ludo Rules</h2>
+      <ul style="font-size:0.85rem; line-height:1.5; color:#cbd5e1; padding-left:18px;">
+        <li>Roll <strong>6</strong> to bring a token out of the base yard.</li>
+        <li>Rolling 6 gives an <strong>extra turn</strong>!</li>
+        <li>Land on an opponent's token on regular squares to <strong>capture</strong> it back to their base & earn an extra roll!</li>
+        <li>Tokens on <strong>Star squares</strong> are safe from capture.</li>
+        <li>Tokens require an exact roll to enter the center Goal.</li>
+        <li>First player to bring all 4 tokens Home wins!</li>
+      </ul>
+      <button id="btn-close-rules" class="btn-start" style="margin-top:16px;">Got It!</button>
+    </div>
+  </div>
+
+  <!-- Statistics Modal -->
+  <div id="stats-modal" class="modal hidden">
+    <div class="modal-content" style="max-width: 420px; text-align: left;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <h2 style="margin:0; font-size:1.25rem; color:#38bdf8;">📊 Player Statistics</h2>
+        <button id="btn-close-stats" class="btn-icon" style="width:32px; height:32px;">✕</button>
+      </div>
+      <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:12px;">Persistent match records & win percentages</div>
+      <div id="stats-table-container" style="max-height:220px; overflow-y:auto; margin-bottom:14px;"></div>
+      <div style="display:flex; gap:8px;">
+        <button id="btn-reset-stats" style="flex:1; padding:10px; background:#ef4444; border:none; border-radius:10px; color:white; font-weight:700; cursor:pointer;">Reset Stats</button>
+        <button id="btn-done-stats" style="flex:1; padding:10px; background:#0284c7; border:none; border-radius:10px; color:white; font-weight:700; cursor:pointer;">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reset Confirmation Modal -->
+  <div id="reset-confirm-modal" class="modal hidden">
+    <div class="modal-content" style="max-width:320px;">
+      <h3 style="color:#ef4444; margin-bottom:8px;">⚠️ Reset Statistics?</h3>
+      <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:16px;">Are you sure you want to reset all player stats? This permanently clears completed game counts and win percentages.</p>
+      <div style="display:flex; gap:8px;">
+        <button id="btn-cancel-reset" style="flex:1; padding:10px; background:#475569; border:none; border-radius:10px; color:white; font-weight:700; cursor:pointer;">Cancel</button>
+        <button id="btn-confirm-reset" style="flex:1; padding:10px; background:#dc2626; border:none; border-radius:10px; color:white; font-weight:700; cursor:pointer;">Confirm Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Victory Modal -->
+  <div id="victory-modal" class="modal hidden">
+    <div class="modal-content">
+      <div style="font-size:3rem;">🏆</div>
+      <h2 style="color:#f59e0b;">VICTORY!</h2>
+      <p id="winner-name" style="font-weight:700; margin-bottom:16px;">Player wins!</p>
+      <div style="display:flex; gap:8px;">
+        <button id="btn-victory-stats" style="flex:1; padding:12px; background:#0284c7; border:none; border-radius:12px; color:white; font-weight:700; cursor:pointer;">View Stats</button>
+        <button id="btn-play-again" class="btn-start" style="flex:1; margin-top:0;">Play Again</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Web Audio API Synthesizer for Jitu Ludo
+    const SoundFX = {
+      ctx: null,
+      masterGain: null,
+      enabled: localStorage.getItem('jitu_ludo_sound') !== 'false',
+
+      init() {
+        if (!this.ctx) {
+          try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) {
+              this.ctx = new AudioCtx();
+              this.masterGain = this.ctx.createGain();
+              this.masterGain.gain.setValueAtTime(this.enabled ? 1.0 : 0.0, this.ctx.currentTime);
+              this.masterGain.connect(this.ctx.destination);
+              console.log('[SoundFX] AudioContext created, initial state:', this.ctx.state);
+            }
+          } catch (e) {
+            console.warn('[SoundFX] AudioContext creation failed:', e);
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume().then(() => {
+            console.log('[SoundFX] AudioContext resumed successfully');
+          }).catch(err => {
+            console.warn('[SoundFX] AudioContext resume failed:', err);
+          });
+        }
+      },
+
+      getMaster() {
+        this.init();
+        if (!this.ctx) return null;
+        if (!this.masterGain) {
+          this.masterGain = this.ctx.createGain();
+          this.masterGain.gain.setValueAtTime(this.enabled ? 1.0 : 0.0, this.ctx.currentTime);
+          this.masterGain.connect(this.ctx.destination);
+        }
+        return this.masterGain;
+      },
+
+      toggle() {
+        this.init();
+        this.enabled = !this.enabled;
+        localStorage.setItem('jitu_ludo_sound', this.enabled ? 'true' : 'false');
+        if (this.masterGain && this.ctx) {
+          this.masterGain.gain.setValueAtTime(this.enabled ? 1.0 : 0.0, this.ctx.currentTime);
+        }
+        this.updateIcon();
+        if (this.enabled) {
+          this.playButtonClick();
+        }
+        return this.enabled;
+      },
+
+      updateIcon() {
+        const btn = document.getElementById('btn-sound');
+        if (btn) {
+          btn.innerText = this.enabled ? '🔊' : '🔇';
+          btn.title = this.enabled ? 'Sound: ON' : 'Sound: OFF';
+        }
+      },
+
+      playDice() {
+        if (!this.enabled) return;
+        const master = this.getMaster();
+        if (!master || !this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const clicks = [0, 0.04, 0.09, 0.15, 0.22, 0.29];
+          clicks.forEach((offset, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            const freq = 740 - idx * 55;
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + offset);
+            osc.frequency.exponentialRampToValueAtTime(140, now + offset + 0.038);
+            gain.gain.setValueAtTime(0.30, now + offset);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.038);
+            osc.connect(gain);
+            gain.connect(master);
+            osc.start(now + offset);
+            osc.stop(now + offset + 0.042);
+          });
+        } catch (e) {
+          console.warn('[SoundFX] playDice error:', e);
+        }
+      },
+
+      playMove() {
+        if (!this.enabled) return;
+        const master = this.getMaster();
+        if (!master || !this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(480, now);
+          osc.frequency.exponentialRampToValueAtTime(280, now + 0.09);
+          gain.gain.setValueAtTime(0.32, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+          osc.connect(gain);
+          gain.connect(master);
+          osc.start(now);
+          osc.stop(now + 0.095);
+        } catch (e) {
+          console.warn('[SoundFX] playMove error:', e);
+        }
+      },
+
+      playCapture() {
+        if (!this.enabled) return;
+        const master = this.getMaster();
+        if (!master || !this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(840, now);
+          osc.frequency.exponentialRampToValueAtTime(110, now + 0.22);
+          gain.gain.setValueAtTime(0.38, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+          osc.connect(gain);
+          gain.connect(master);
+          osc.start(now);
+          osc.stop(now + 0.23);
+        } catch (e) {
+          console.warn('[SoundFX] playCapture error:', e);
+        }
+      },
+
+      playHome() {
+        if (!this.enabled) return;
+        const master = this.getMaster();
+        if (!master || !this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const notes = [523.25, 659.25, 783.99, 1046.50];
+          notes.forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.09);
+            gain.gain.setValueAtTime(0.30, now + idx * 0.09);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.09 + 0.17);
+            osc.connect(gain);
+            gain.connect(master);
+            osc.start(now + idx * 0.09);
+            osc.stop(now + idx * 0.09 + 0.18);
+          });
+        } catch (e) {
+          console.warn('[SoundFX] playHome error:', e);
+        }
+      },
+
+      playVictory() {
+        if (!this.enabled) return;
+        const master = this.getMaster();
+        if (!master || !this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const notes = [
+            { f: 392.00, d: 0.11 },
+            { f: 523.25, d: 0.11 },
+            { f: 659.25, d: 0.11 },
+            { f: 783.99, d: 0.14 },
+            { f: 1046.50, d: 0.42 }
+          ];
+          let curTime = now;
+          notes.forEach(note => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(note.f, curTime);
+            gain.gain.setValueAtTime(0.35, curTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, curTime + note.d);
+            osc.connect(gain);
+            gain.connect(master);
+            osc.start(curTime);
+            osc.stop(curTime + note.d + 0.01);
+            curTime += note.d * 0.95;
+          });
+        } catch (e) {
+          console.warn('[SoundFX] playVictory error:', e);
+        }
+      },
+
+      playButtonClick() {
+        if (!this.enabled) return;
+        const master = this.getMaster();
+        if (!master || !this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(950, now);
+          osc.frequency.exponentialRampToValueAtTime(450, now + 0.03);
+          gain.gain.setValueAtTime(0.20, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+          osc.connect(gain);
+          gain.connect(master);
+          osc.start(now);
+          osc.stop(now + 0.035);
+        } catch (e) {
+          console.warn('[SoundFX] playButtonClick error:', e);
+        }
+      },
+
+      playTurnChange() {
+        if (!this.enabled) return;
+        const master = this.getMaster();
+        if (!master || !this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, now);
+          gain.gain.setValueAtTime(0.22, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+          osc.connect(gain);
+          gain.connect(master);
+          osc.start(now);
+          osc.stop(now + 0.15);
+        } catch (e) {
+          console.warn('[SoundFX] playTurnChange error:', e);
+        }
+      }
+    };
+
+    // User gesture handlers to resume AudioContext per browser autoplay policy
+    ['click', 'touchstart', 'touchend', 'pointerdown', 'mousedown'].forEach(evt => {
+      document.addEventListener(evt, () => {
+        SoundFX.init();
+      }, { once: false, passive: true });
+    });
+
+    // Pure Vanilla TypeScript/JavaScript offline Ludo Engine
+    const COLORS = [
+      { id: 'RED', name: 'Red', primary: '#dc2626', light: '#fecaca', start: 0 },
+      { id: 'GREEN', name: 'Green', primary: '#16a34a', light: '#bbf7d0', start: 13 },
+      { id: 'YELLOW', name: 'Yellow', primary: '#ca8a04', light: '#fef08a', start: 26 },
+      { id: 'BLUE', name: 'Blue', primary: '#2563eb', light: '#bfdbfe', start: 39 }
+    ];
+
+    const SAFE_SQUARES = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
+
+    // Outer 52 track coordinates [col, row]
+    const TRACK = [
+      [6,13],[6,12],[6,11],[6,10],[6,9],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8],[0,7],
+      [0,6],[1,6],[2,6],[3,6],[4,6],[5,6],[6,5],[6,4],[6,3],[6,2],[6,1],[6,0],[7,0],
+      [8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[9,6],[10,6],[11,6],[12,6],[13,6],[14,6],
+      [14,7],[14,8],[13,8],[12,8],[11,8],[10,8],[9,8],[8,9],[8,10],[8,11],[8,12],
+      [8,13],[8,14],[7,14],[6,14]
+    ];
+
+    const HOME_LANES = {
+      RED: [[7,13],[7,12],[7,11],[7,10],[7,9]],
+      GREEN: [[1,7],[2,7],[3,7],[4,7],[5,7]],
+      YELLOW: [[7,1],[7,2],[7,3],[7,4],[7,5]],
+      BLUE: [[13,7],[12,7],[11,7],[10,7],[9,7]]
+    };
+
+    const BASES = {
+      RED: [[2,11],[4,11],[2,13],[4,13]],
+      GREEN: [[2,2],[4,2],[2,4],[4,4]],
+      YELLOW: [[11,2],[13,2],[11,4],[13,4]],
+      BLUE: [[11,11],[13,11],[11,13],[13,13]]
+    };
+
+    let gameState = {
+      mode: 'LOCAL', // LOCAL or BOT
+      players: [],
+      currentTurn: 0,
+      diceValue: 1,
+      isRolling: false,
+      phase: 'ROLL', // ROLL or MOVE
+      movable: [],
+      consecutiveSixes: 0,
+      completedRecorded: false
+    };
+
+    const canvas = document.getElementById('ludo-canvas');
+    const ctx = canvas.getContext('2d');
+
+    function initGame(mode, count) {
+      let selectedColors = [];
+      if (count === 2) selectedColors = [COLORS[0], COLORS[2]]; // Red & Yellow
+      else if (count === 3) selectedColors = [COLORS[0], COLORS[1], COLORS[2]];
+      else selectedColors = [...COLORS];
+
+      gameState.mode = mode;
+      gameState.players = selectedColors.map((c, i) => ({
+        color: c.id,
+        name: mode === 'BOT' && i > 0 ? `Bot ${c.name}` : `${c.name} Player`,
+        isBot: mode === 'BOT' && i > 0,
+        tokens: [
+          { id: 0, state: 'BASE', step: -1 },
+          { id: 1, state: 'BASE', step: -1 },
+          { id: 2, state: 'BASE', step: -1 },
+          { id: 3, state: 'BASE', step: -1 }
+        ],
+        finished: 0
+      }));
+
+      gameState.currentTurn = 0;
+      gameState.diceValue = 1;
+      gameState.phase = 'ROLL';
+      gameState.movable = [];
+      gameState.consecutiveSixes = 0;
+      gameState.completedRecorded = false;
+
+      document.getElementById('mode-badge').innerText = mode === 'BOT' ? 'vs Computer' : 'Pass & Play';
+      updateUI();
+      drawBoard();
+
+      checkBotTurn();
+    }
+
+    function rollDice() {
+      if (gameState.phase !== 'ROLL' || gameState.isRolling) return;
+
+      SoundFX.playDice();
+      gameState.isRolling = true;
+      const diceEl = document.getElementById('dice-btn');
+      diceEl.classList.add('rolling');
+
+      let rolls = 0;
+      const interval = setInterval(() => {
+        renderDice(Math.floor(Math.random() * 6) + 1);
+        rolls++;
+        if (rolls > 6) {
+          clearInterval(interval);
+          diceEl.classList.remove('rolling');
+          gameState.isRolling = false;
+
+          const roll = Math.floor(Math.random() * 6) + 1;
+          gameState.diceValue = roll;
+          renderDice(roll);
+
+          onRollCompleted(roll);
+        }
+      }, 50);
+    }
+
+    function onRollCompleted(roll) {
+      const p = gameState.players[gameState.currentTurn];
+      if (roll === 6) gameState.consecutiveSixes++;
+      else gameState.consecutiveSixes = 0;
+
+      if (gameState.consecutiveSixes >= 3) {
+        showMessage(`${p.name} rolled three 6s! Turn forfeited.`);
+        nextTurn();
+        return;
+      }
+
+      const movable = [];
+      p.tokens.forEach(t => {
+        if (t.state === 'HOME') return;
+        if (t.state === 'BASE' && roll === 6) movable.push(t.id);
+        else if (t.state === 'TRACK' && t.step + roll <= 56) movable.push(t.id);
+      });
+
+      gameState.movable = movable;
+
+      if (movable.length === 0) {
+        showMessage(`${p.name} rolled ${roll}. No moves!`);
+        setTimeout(nextTurn, 900);
+      } else {
+        gameState.phase = 'MOVE';
+        const msg = movable.length === 1
+          ? (p.isBot ? `${p.name} rolled ${roll}. Bot moving...` : `${p.name} rolled ${roll}. Auto-moving token...`)
+          : `${p.name} rolled ${roll}. Select a token to move.`;
+        showMessage(msg);
+        updateUI();
+        drawBoard();
+
+        if (p.isBot) {
+          setTimeout(botMove, 700);
+        } else if (movable.length === 1) {
+          // Feature 2: Auto-move when exactly one legal move exists
+          setTimeout(() => {
+            if (gameState.phase === 'MOVE' && gameState.movable.length === 1 && gameState.movable[0] === movable[0]) {
+              moveToken(movable[0]);
+            }
+          }, 550);
+        }
+      }
+    }
+
+    function showCaptureEmoji(capturingName, capturedName) {
+      const overlay = document.getElementById('capture-overlay');
+      if (!overlay) return;
+      const capEmojis = ['😎', '🔥'];
+      const cryEmojis = ['😭', '😵‍💫'];
+      const cap = capEmojis[Math.floor(Math.random() * capEmojis.length)];
+      const cry = cryEmojis[Math.floor(Math.random() * cryEmojis.length)];
+      overlay.innerHTML = `
+        <div class="capture-badge">
+          <div style="font-size:0.75rem;font-weight:900;color:#f59e0b;margin-bottom:4px;">⚔️ TOKEN CAPTURED! ⚔️</div>
+          <div style="font-size:1.6rem;margin:4px 0;">${cap}  💥  ${cry}</div>
+          <div style="font-size:0.82rem;font-weight:700;">${capturingName} sent ${capturedName} home!</div>
+        </div>
+      `;
+      overlay.style.display = 'flex';
+      setTimeout(() => {
+        overlay.style.display = 'none';
+      }, 1300);
+    }
+
+    function moveToken(tokenId) {
+      if (gameState.phase !== 'MOVE') return;
+      if (!gameState.movable.includes(tokenId)) return;
+
+      const p = gameState.players[gameState.currentTurn];
+      const t = p.tokens[tokenId];
+      const roll = gameState.diceValue;
+
+      let bonus = false;
+      let reason = '';
+      let capturedPlayerName = null;
+
+      if (t.state === 'BASE') {
+        t.state = 'TRACK';
+        t.step = 0;
+        bonus = true;
+        reason = 'Rolled 6! Extra turn!';
+        SoundFX.playMove();
+      } else if (t.state === 'TRACK') {
+        t.step += roll;
+        if (t.step === 56) {
+          t.state = 'HOME';
+          p.finished++;
+          bonus = true;
+          reason = 'Token Home! Extra turn!';
+          SoundFX.playHome();
+        } else {
+          SoundFX.playMove();
+        }
+      }
+
+      // Capture check
+      if (t.state === 'TRACK' && t.step < 51) {
+        const cConfig = COLORS.find(c => c.id === p.color);
+        const trackIdx = (cConfig.start + t.step) % 52;
+
+        if (!SAFE_SQUARES.has(trackIdx)) {
+          gameState.players.forEach(other => {
+            if (other.color === p.color) return;
+            const otherConfig = COLORS.find(c => c.id === other.color);
+            other.tokens.forEach(ot => {
+              if (ot.state === 'TRACK' && ot.step < 51) {
+                const otTrack = (otherConfig.start + ot.step) % 52;
+                if (otTrack === trackIdx) {
+                  ot.state = 'BASE';
+                  ot.step = -1;
+                  bonus = true;
+                  reason = `Captured ${other.name}'s token! Extra turn!`;
+                  capturedPlayerName = other.name;
+                }
+              }
+            });
+          });
+        }
+      }
+
+      if (capturedPlayerName) {
+        SoundFX.playCapture();
+        showCaptureEmoji(p.name, capturedPlayerName);
+      }
+
+      // Check Winner
+      if (p.finished === 4) {
+        SoundFX.playVictory();
+        recordGameCompletion(p);
+        showVictory(p.name);
+        return;
+      }
+
+      gameState.phase = 'ROLL';
+      gameState.movable = [];
+
+      if (bonus) {
+        showMessage(`${p.name} gets bonus roll! (${reason})`);
+        updateUI();
+        drawBoard();
+        checkBotTurn();
+      } else {
+        nextTurn();
+      }
+    }
+
+    function nextTurn() {
+      gameState.consecutiveSixes = 0;
+      gameState.phase = 'ROLL';
+      gameState.movable = [];
+      gameState.currentTurn = (gameState.currentTurn + 1) % gameState.players.length;
+      SoundFX.playTurnChange();
+      updateUI();
+      drawBoard();
+      checkBotTurn();
+    }
+
+    function checkBotTurn() {
+      const p = gameState.players[gameState.currentTurn];
+      if (p && p.isBot && gameState.phase === 'ROLL') {
+        setTimeout(rollDice, 800);
+      }
+    }
+
+    function botMove() {
+      if (gameState.movable.length === 0) return;
+      // Bot picks token closest to finishing or leaving base
+      const chosen = gameState.movable[0];
+      moveToken(chosen);
+    }
+
+    function showMessage(msg) {
+      document.getElementById('status-text').innerText = msg;
+    }
+
+    function renderDice(val) {
+      const diceEl = document.getElementById('dice-btn');
+      diceEl.innerHTML = '';
+      const patterns = {
+        1: [5],
+        2: [1, 9],
+        3: [1, 5, 9],
+        4: [1, 3, 7, 9],
+        5: [1, 3, 5, 7, 9],
+        6: [1, 3, 4, 6, 7, 9]
+      };
+      const dots = patterns[val] || [5];
+      for (let i = 1; i <= 9; i++) {
+        const span = document.createElement('span');
+        if (dots.includes(i)) {
+          span.className = val === 6 ? 'pip red' : 'pip';
+        }
+        diceEl.appendChild(span);
+      }
+    }
+
+    function updateUI() {
+      const p = gameState.players[gameState.currentTurn];
+      const col = COLORS.find(c => c.id === p.color);
+
+      document.getElementById('current-avatar').style.background = col.primary;
+      document.getElementById('current-avatar').innerText = p.name.charAt(0);
+      document.getElementById('current-name').innerText = p.name;
+      document.getElementById('current-hint').innerText = gameState.phase === 'ROLL'
+        ? (p.isBot ? 'Bot rolling...' : 'Tap ROLL to roll dice!')
+        : (p.isBot ? 'Bot moving...' : 'Tap token to move!');
+
+      document.getElementById('roll-action-btn').disabled = gameState.phase !== 'ROLL' || p.isBot;
+      document.getElementById('roll-action-btn').style.background = col.primary;
+
+      // Render players bar
+      const pBar = document.getElementById('players-bar');
+      pBar.innerHTML = '';
+      gameState.players.forEach((player, idx) => {
+        const c = COLORS.find(cl => cl.id === player.color);
+        const card = document.createElement('div');
+        card.className = `player-card ${idx === gameState.currentTurn ? 'active' : ''}`;
+        card.style.borderColor = idx === gameState.currentTurn ? c.primary : 'transparent';
+        card.innerHTML = `
+          <div class="player-name" style="color:${c.primary};">${player.name}</div>
+          <div class="player-tokens-dots">
+            ${player.tokens.map(tk => `<div class="dot ${tk.state === 'HOME' ? 'home' : (tk.state === 'TRACK' ? 'active' : '')}"></div>`).join('')}
+          </div>
+        `;
+        pBar.appendChild(card);
+      });
+    }
+
+    function drawBoard() {
+      const size = 600;
+      const cell = size / 15;
+      ctx.clearRect(0, 0, size, size);
+
+      // 1. Background
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
+
+      // Corner Yards
+      drawYard(0, 0, '#16a34a', BASES.GREEN);
+      drawYard(9, 0, '#ca8a04', BASES.YELLOW);
+      drawYard(9, 9, '#2563eb', BASES.BLUE);
+      drawYard(0, 9, '#dc2626', BASES.RED);
+
+      // Track Cells
+      TRACK.forEach((coord, i) => {
+        const [c, r] = coord;
+        let fill = "#ffffff";
+        if (i === 0) fill = "#fecaca"; // Red start
+        else if (i === 13) fill = "#bbf7d0"; // Green start
+        else if (i === 26) fill = "#fef08a"; // Yellow start
+        else if (i === 39) fill = "#bfdbfe"; // Blue start
+        else if (SAFE_SQUARES.has(i)) fill = "#ede9fe";
+
+        ctx.fillStyle = fill;
+        ctx.fillRect(c * cell, r * cell, cell, cell);
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(c * cell, r * cell, cell, cell);
+
+        if (SAFE_SQUARES.has(i)) {
+          drawStar(c * cell + cell/2, r * cell + cell/2, cell * 0.35, '#f59e0b');
+        }
+      });
+
+      // Home Lanes
+      drawLane(HOME_LANES.RED, '#dc2626');
+      drawLane(HOME_LANES.GREEN, '#16a34a');
+      drawLane(HOME_LANES.YELLOW, '#ca8a04');
+      drawLane(HOME_LANES.BLUE, '#2563eb');
+
+      // Center Home Triangles
+      drawCenter(cell);
+
+      // Draw Tokens
+      const cur = gameState.players[gameState.currentTurn];
+      gameState.players.forEach(p => {
+        const col = COLORS.find(c => c.id === p.color);
+        p.tokens.forEach(t => {
+          let [x, y] = [0, 0];
+          if (t.state === 'BASE') {
+            const basePos = BASES[p.color][t.id];
+            x = (basePos[0] + 0.5) * cell;
+            y = (basePos[1] + 0.5) * cell;
+          } else if (t.state === 'TRACK') {
+            if (t.step < 51) {
+              const trkIdx = (col.start + t.step) % 52;
+              const [c, r] = TRACK[trkIdx];
+              x = (c + 0.5) * cell;
+              y = (r + 0.5) * cell;
+            } else {
+              const hIdx = t.step - 51;
+              const [c, r] = HOME_LANES[p.color][hIdx];
+              x = (c + 0.5) * cell;
+              y = (r + 0.5) * cell;
+            }
+          } else {
+            // Home center
+            x = 7.5 * cell + (t.id - 1.5) * 8;
+            y = 7.5 * cell + (t.id - 1.5) * 8;
+          }
+
+          const isMovable = gameState.phase === 'MOVE' && p.color === cur.color && gameState.movable.includes(t.id);
+          drawToken(x, y, col.primary, isMovable, cell * 0.38);
+        });
+      });
+    }
+
+    function drawYard(col, row, color, slots) {
+      const cell = 600 / 15;
+      const x = col * cell;
+      const y = row * cell;
+      const size = 6 * cell;
+
+      // Deep vibrant background
+      ctx.save();
+      const grad = ctx.createRadialGradient(x + size*0.5, y + size*0.5, size*0.1, x + size*0.5, y + size*0.5, size*0.7);
+      grad.addColorStop(0, color);
+      grad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, size, size);
+
+      // Inner glossy white base card with drop shadow
+      const pad = cell * 0.8;
+      const plateSize = 4.4 * cell;
+      const px = x + pad;
+      const py = y + pad;
+
+      ctx.shadowColor = 'rgba(0,0,0,0.35)';
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetY = 3;
+      ctx.fillStyle = '#ffffff';
+      roundRect(ctx, px, py, plateSize, plateSize, cell * 0.65);
+      ctx.fill();
+      ctx.restore();
+
+      // Sockets (4 circular wells with colored ring matching player color)
+      slots.forEach(slot => {
+        const sx = (slot[0] + 0.5) * cell;
+        const sy = (slot[1] + 0.5) * cell;
+        const sr = cell * 0.44;
+
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = cell * 0.085;
+        ctx.stroke();
+      });
+    }
+
+    function roundRect(context, x, y, w, h, r) {
+      context.beginPath();
+      context.moveTo(x + r, y);
+      context.arcTo(x + w, y, x + w, y + h, r);
+      context.arcTo(x + w, y + h, x, y + h, r);
+      context.arcTo(x, y + h, x, y, r);
+      context.arcTo(x, y, x + w, y, r);
+      context.closePath();
+    }
+
+    function drawLane(coords, color) {
+      const cell = 600 / 15;
+      coords.forEach(([c, r]) => {
+        ctx.fillStyle = color;
+        ctx.fillRect(c * cell, r * cell, cell, cell);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(c * cell, r * cell, cell, cell);
+      });
+    }
+
+    function drawCenter(cell) {
+      const center = 7.5 * cell;
+      // Top Yellow
+      ctx.fillStyle = "#eab308";
+      ctx.beginPath(); ctx.moveTo(6*cell, 6*cell); ctx.lineTo(9*cell, 6*cell); ctx.lineTo(center, center); ctx.fill();
+      // Right Blue
+      ctx.fillStyle = "#2563eb";
+      ctx.beginPath(); ctx.moveTo(9*cell, 6*cell); ctx.lineTo(9*cell, 9*cell); ctx.lineTo(center, center); ctx.fill();
+      // Bottom Red
+      ctx.fillStyle = "#dc2626";
+      ctx.beginPath(); ctx.moveTo(9*cell, 9*cell); ctx.lineTo(6*cell, 9*cell); ctx.lineTo(center, center); ctx.fill();
+      // Left Green
+      ctx.fillStyle = "#16a34a";
+      ctx.beginPath(); ctx.moveTo(6*cell, 6*cell); ctx.lineTo(6*cell, 9*cell); ctx.lineTo(center, center); ctx.fill();
+
+      // Dividers
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(6*cell, 6*cell); ctx.lineTo(9*cell, 9*cell); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(9*cell, 6*cell); ctx.lineTo(6*cell, 9*cell); ctx.stroke();
+
+      // Center gold medallion
+      ctx.beginPath();
+      ctx.arc(center, center, cell * 0.52, 0, Math.PI * 2);
+      ctx.fillStyle = "#fef08a";
+      ctx.fill();
+      ctx.strokeStyle = "#f59e0b";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      drawStar(center, center, cell * 0.35, '#b45309');
+    }
+
+    function drawStar(cx, cy, r, color) {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const radius = i % 2 === 0 ? r : r * 0.45;
+        const angle = (i * Math.PI / 5) - Math.PI / 2;
+        const x = cx + radius * Math.cos(angle);
+        const y = cy + radius * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawToken(x, y, color, movable, radius) {
+      ctx.save();
+
+      // Selection pulse halo
+      if (movable) {
+        ctx.beginPath();
+        ctx.arc(x, y, radius * 1.6, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(245, 158, 11, 0.40)";
+        ctx.fill();
+        ctx.strokeStyle = "#f59e0b";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+
+      // 1. Soft contact shadow
+      ctx.beginPath();
+      ctx.ellipse(x + 1, y + radius * 0.35, radius * 0.85, radius * 0.45, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+      ctx.fill();
+
+      // 2. Base Pedestal / Bell
+      ctx.beginPath();
+      ctx.ellipse(x, y + radius * 0.25, radius * 0.8, radius * 0.45, 0, 0, Math.PI * 2);
+      const baseGrad = ctx.createRadialGradient(x - radius * 0.3, y + radius * 0.1, 1, x, y + radius * 0.25, radius);
+      baseGrad.addColorStop(0, '#ffffff');
+      baseGrad.addColorStop(0.3, color);
+      baseGrad.addColorStop(1, '#000000');
+      ctx.fillStyle = baseGrad;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // 3. Collar
+      ctx.beginPath();
+      ctx.ellipse(x, y - radius * 0.15, radius * 0.45, radius * 0.18, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // 4. Glossy 3D Head Sphere
+      const hy = y - radius * 0.42;
+      const hr = radius * 0.58;
+      ctx.beginPath();
+      ctx.arc(x, hy, hr, 0, Math.PI * 2);
+      const headGrad = ctx.createRadialGradient(x - hr * 0.35, hy - hr * 0.35, 1, x, hy, hr * 1.3);
+      headGrad.addColorStop(0, '#ffffff');
+      headGrad.addColorStop(0.25, color);
+      headGrad.addColorStop(0.9, '#000000');
+      ctx.fillStyle = headGrad;
+      ctx.fill();
+
+      // Specular highlight glint
+      ctx.beginPath();
+      ctx.arc(x - hr * 0.35, hy - hr * 0.35, hr * 0.22, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // Touch tap handler on canvas
+    canvas.addEventListener('click', (e) => {
+      if (gameState.phase !== 'MOVE') return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = 600 / rect.width;
+      const scaleY = 600 / rect.height;
+      const tapX = (e.clientX - rect.left) * scaleX;
+      const tapY = (e.clientY - rect.top) * scaleY;
+      const cell = 600 / 15;
+
+      const cur = gameState.players[gameState.currentTurn];
+      if (cur.isBot) return;
+
+      const col = COLORS.find(c => c.id === cur.color);
+      for (let tokenId of gameState.movable) {
+        const t = cur.tokens[tokenId];
+        let [x, y] = [0, 0];
+        if (t.state === 'BASE') {
+          const bp = BASES[cur.color][t.id];
+          x = (bp[0] + 0.5) * cell;
+          y = (bp[1] + 0.5) * cell;
+        } else if (t.state === 'TRACK') {
+          if (t.step < 51) {
+            const trk = (col.start + t.step) % 52;
+            const [c, r] = TRACK[trk];
+            x = (c + 0.5) * cell;
+            y = (r + 0.5) * cell;
+          } else {
+            const h = t.step - 51;
+            const [c, r] = HOME_LANES[cur.color][h];
+            x = (c + 0.5) * cell;
+            y = (r + 0.5) * cell;
+          }
+        }
+        const dist = Math.hypot(tapX - x, tapY - y);
+        if (dist <= cell * 0.95) {
+          moveToken(tokenId);
+          return;
+        }
+      }
+    });
+
+    const STATS_STORAGE_KEY = 'jitu_ludo_player_stats';
+
+    function getPlayerStats() {
+      try {
+        const raw = localStorage.getItem(STATS_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function savePlayerStats(stats) {
+      try {
+        localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(stats));
+      } catch (e) {}
+    }
+
+    function getPlayerId(player) {
+      if (player.isBot) {
+        return `bot_${player.color.toLowerCase()}`;
+      }
+      return `human_${player.name.trim().toLowerCase()}`;
+    }
+
+    function formatWinPercentage(wins, completedGames) {
+      if (!completedGames || completedGames === 0) return '—';
+      const pct = (wins / completedGames) * 100;
+      return (pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)) + '%';
+    }
+
+    function recordGameCompletion(winnerPlayer) {
+      if (gameState.completedRecorded) return;
+      gameState.completedRecorded = true;
+
+      const stats = getPlayerStats();
+      gameState.players.forEach(p => {
+        const id = getPlayerId(p);
+        if (!stats[id]) {
+          stats[id] = {
+            id,
+            name: p.name,
+            color: p.color,
+            isBot: p.isBot,
+            wins: 0,
+            completedGames: 0
+          };
+        }
+        stats[id].completedGames = (stats[id].completedGames || 0) + 1;
+        if (p.color === winnerPlayer.color && p.name === winnerPlayer.name) {
+          stats[id].wins = (stats[id].wins || 0) + 1;
+        }
+      });
+
+      savePlayerStats(stats);
+    }
+
+    function renderStatsTable() {
+      const container = document.getElementById('stats-table-container');
+      const stats = getPlayerStats();
+      const records = Object.values(stats);
+
+      if (records.length === 0) {
+        container.innerHTML = `
+          <div style="text-align:center; padding:30px 10px; color:#94a3b8;">
+            <div style="font-size:1.8rem; margin-bottom:6px;">🏆</div>
+            <div style="font-weight:700; font-size:0.9rem; color:#cbd5e1;">No completed games yet</div>
+            <div style="font-size:0.75rem; color:#64748b;">Finish a match to record statistics!</div>
+          </div>
+        `;
+        return;
+      }
+
+      records.sort((a, b) => b.wins - a.wins || b.completedGames - a.completedGames);
+
+      let html = `
+        <table style="width:100%; border-collapse:collapse; font-size:0.8rem;">
+          <thead>
+            <tr style="color:#94a3b8; border-bottom:1px solid #334155; text-align:left;">
+              <th style="padding:6px 4px;">Player</th>
+              <th style="padding:6px 4px; text-align:center;">Games</th>
+              <th style="padding:6px 4px; text-align:center;">Wins</th>
+              <th style="padding:6px 4px; text-align:right;">Win %</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      records.forEach(r => {
+        const colCfg = COLORS.find(c => c.id === r.color) || COLORS[0];
+        const winPct = formatWinPercentage(r.wins, r.completedGames);
+        html += `
+          <tr style="border-bottom:1px solid #1e293b;">
+            <td style="padding:8px 4px; display:flex; align-items:center; gap:6px;">
+              <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${colCfg.primary};"></span>
+              <span style="font-weight:700; color:white;">${r.name}</span>
+              ${r.isBot ? '<span style="font-size:0.65rem; color:#a855f7; background:rgba(168,85,247,0.2); padding:1px 4px; border-radius:4px;">BOT</span>' : ''}
+            </td>
+            <td style="padding:8px 4px; text-align:center; color:#cbd5e1;">${r.completedGames}</td>
+            <td style="padding:8px 4px; text-align:center; font-weight:800; color:#fbbf24;">${r.wins}</td>
+            <td style="padding:8px 4px; text-align:right;">
+              <span style="background:${r.wins > 0 ? '#065f46' : '#334155'}; color:${r.wins > 0 ? '#34d399' : '#94a3b8'}; padding:2px 6px; border-radius:4px; font-weight:800; font-size:0.75rem;">
+                ${winPct}
+              </span>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    function showVictory(name) {
+      document.getElementById('winner-name').innerText = `${name} crowned Champion!`;
+      document.getElementById('victory-modal').classList.remove('hidden');
+    }
+
+    // Event listeners
+    document.getElementById('roll-action-btn').addEventListener('click', rollDice);
+    document.getElementById('dice-btn').addEventListener('click', rollDice);
+
+    document.getElementById('btn-sound').addEventListener('click', () => {
+      SoundFX.toggle();
+    });
+
+    document.getElementById('btn-menu').addEventListener('click', () => {
+      SoundFX.playButtonClick();
+      document.getElementById('setup-modal').classList.remove('hidden');
+    });
+
+    document.getElementById('btn-rules').addEventListener('click', () => {
+      SoundFX.playButtonClick();
+      document.getElementById('rules-modal').classList.remove('hidden');
+    });
+    document.getElementById('btn-close-rules').addEventListener('click', () => {
+      SoundFX.playButtonClick();
+      document.getElementById('rules-modal').classList.add('hidden');
+    });
+
+    document.getElementById('btn-stats').addEventListener('click', () => {
+      SoundFX.playButtonClick();
+      renderStatsTable();
+      document.getElementById('stats-modal').classList.remove('hidden');
+    });
+    document.getElementById('btn-close-stats').addEventListener('click', () => {
+      SoundFX.playButtonClick();
+      document.getElementById('stats-modal').classList.add('hidden');
+    });
+    document.getElementById('btn-done-stats').addEventListener('click', () => {
+      SoundFX.playButtonClick();
+      document.getElementById('stats-modal').classList.add('hidden');
+    });
+
+    document.getElementById('btn-reset-stats').addEventListener('click', () => {
+      SoundFX.playButtonClick();
+      document.getElementById('reset-confirm-modal').classList.remove('hidden');
+    });
+    document.getElementById('btn-cancel-reset').addEventListener('click', () => {
+      SoundFX.playButtonClick();
+      document.getElementById('reset-confirm-modal').classList.add('hidden');
+    });
+    document.getElementById('btn-confirm-reset').addEventListener('click', () => {
+      SoundFX.playButtonClick();
+      localStorage.removeItem(STATS_STORAGE_KEY);
+      renderStatsTable();
+      document.getElementById('reset-confirm-modal').classList.add('hidden');
+    });
+
+    document.getElementById('btn-victory-stats').addEventListener('click', () => {
+      SoundFX.playButtonClick();
+      renderStatsTable();
+      document.getElementById('stats-modal').classList.remove('hidden');
+    });
+
+    document.getElementById('btn-play-again').addEventListener('click', () => {
+      SoundFX.playButtonClick();
+      document.getElementById('victory-modal').classList.add('hidden');
+      initGame(gameState.mode, gameState.players.length);
+    });
+
+    // Setup modal options
+    let selectedMode = 'LOCAL';
+    let selectedCount = 2;
+    document.querySelectorAll('#mode-buttons button').forEach(b => {
+      b.addEventListener('click', (e) => {
+        SoundFX.playButtonClick();
+        document.querySelectorAll('#mode-buttons button').forEach(x => x.classList.remove('active'));
+        e.target.classList.add('active');
+        selectedMode = e.target.dataset.mode;
+      });
+    });
+    document.querySelectorAll('#count-buttons button').forEach(b => {
+      b.addEventListener('click', (e) => {
+        SoundFX.playButtonClick();
+        document.querySelectorAll('#count-buttons button').forEach(x => x.classList.remove('active'));
+        e.target.classList.add('active');
+        selectedCount = parseInt(e.target.dataset.count);
+      });
+    });
+
+    document.getElementById('btn-start-game').addEventListener('click', () => {
+      SoundFX.playButtonClick();
+      document.getElementById('setup-modal').classList.add('hidden');
+      initGame(selectedMode, selectedCount);
+    });
+
+    // Initial setup
+    SoundFX.updateIcon();
+    renderDice(1);
+    initGame('LOCAL', 2);
+  </script>
+</body>
+</html>

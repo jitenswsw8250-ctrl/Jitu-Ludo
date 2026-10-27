@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Board Base Card with soft shadow outline -->
+    <path
+        android:pathData="M27,24 h54 a7,7 0 0 1 7,7 v54 a7,7 0 0 1 -7,7 h-54 a7,7 0 0 1 -7,-7 v-54 a7,7 0 0 1 7,-7 z"
+        android:fillColor="#1E293B" />
+    <path
+        android:pathData="M27,22 h54 a7,7 0 0 1 7,7 v54 a7,7 0 0 1 -7,7 h-54 a7,7 0 0 1 -7,-7 v-54 a7,7 0 0 1 7,-7 z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Red Quadrant (Top-Left) -->
+    <path
+        android:pathData="M26,24 a5,5 0 0 1 5,-5 h20 v26 h-25 z"
+        android:fillColor="#E53935" />
+    <path
+        android:pathData="M38,32 A4,4 0 1,0 38,40 A4,4 0 1,0 38,32 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Green Quadrant (Top-Right) -->
+    <path
+        android:pathData="M57,19 h20 a5,5 0 0 1 5,5 v21 h-25 z"
+        android:fillColor="#43A047" />
+    <path
+        android:pathData="M70,32 A4,4 0 1,0 70,40 A4,4 0 1,0 70,32 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Yellow Quadrant (Bottom-Right) -->
+    <path
+        android:pathData="M57,57 h25 v21 a5,5 0 0 1 -5,5 h-20 z"
+        android:fillColor="#FDD835" />
+    <path
+        android:pathData="M70,68 A4,4 0 1,0 70,76 A4,4 0 1,0 70,68 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Blue Quadrant (Bottom-Left) -->
+    <path
+        android:pathData="M26,57 h25 v26 h-20 a5,5 0 0 1 -5,-5 z"
+        android:fillColor="#1E88E5" />
+    <path
+        android:pathData="M38,68 A4,4 0 1,0 38,76 A4,4 0 1,0 38,68 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Center Dice Diamond Base -->
+    <path
+        android:pathData="M54,41 L67,54 L54,67 L41,54 Z"
+        android:fillColor="#1E1B4B" />
+    <path
+        android:pathData="M54,43 L65,54 L54,65 L43,54 Z"
+        android:fillColor="#FFFBEB" />
+
+    <!-- Center Golden Star / Crown on Dice -->
+    <path
+        android:pathData="M54,46 L56.5,51.5 L62.5,52.3 L58,56.5 L59.2,62.4 L54,59.5 L48.8,62.4 L50,56.5 L45.5,52.3 L51.5,51.5 Z"
+        android:fillColor="#F59E0B" />
+</vector>

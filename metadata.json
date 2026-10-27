@@ -1,0 +1,6 @@
+{
+  "name": "Jitu Ludo",
+  "description": "Play classic Ludo board game offline with friends or against smart computer bots with authentic rules and animations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
