@@ -1,13 +1,11 @@
 package com.example
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -15,6 +13,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import com.example.model.PlayerColor
 import com.example.ui.LudoViewModel
 import com.example.ui.screens.GameScreen
 import com.example.ui.screens.HomeScreen
@@ -38,26 +38,24 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .safeDrawingPadding()
-                ) {
-                    LudoAppRoot(viewModel = viewModel)
-                }
+                LudoAppRoot(viewModel = viewModel)
             }
         }
     }
 }
 
 @Composable
-fun LudoAppRoot(viewModel: LudoViewModel) {
+fun LudoAppRoot(
+    viewModel: LudoViewModel,
+    modifier: Modifier = Modifier
+) {
     var currentScreen by remember { mutableStateOf(AppScreen.HOME) }
-    var showRulesModal by remember { mutableStateOf(false) }
-    var showStatsModal by remember { mutableStateOf(false) }
+    var showRulesDialog by remember { mutableStateOf(false) }
+    var showStatsDialog by remember { mutableStateOf(false) }
 
     val gameState by viewModel.gameState.collectAsState()
     val playerStats by viewModel.playerStats.collectAsState()
+    val context = LocalContext.current
 
     when (currentScreen) {
         AppScreen.HOME -> {
@@ -66,82 +64,71 @@ fun LudoAppRoot(viewModel: LudoViewModel) {
                 hapticsEnabled = gameState.hapticsEnabled,
                 onToggleSound = { viewModel.toggleSound() },
                 onToggleHaptics = { viewModel.toggleHaptics() },
-                onStartGame = { mode, playerCount, humanColor, names ->
-                    viewModel.playButtonClick()
+                onStartGame = { mode, count, color, names ->
                     viewModel.startNewGame(
                         mode = mode,
-                        playerCount = playerCount,
-                        humanColor = humanColor,
+                        playerCount = count,
+                        humanColor = color,
                         customNames = names
                     )
                     currentScreen = AppScreen.GAME
                 },
-                onOpenRules = {
-                    viewModel.playButtonClick()
-                    showRulesModal = true
+                onOpenRules = { showRulesDialog = true },
+                onOpenStats = { showStatsDialog = true },
+                onOpenWebView = { currentScreen = AppScreen.WEB_VIEW },
+                onShareGame = {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "Play Jitu Ludo!")
+                        putExtra(
+                            Intent.EXTRA_TEXT,
+                            "Play Jitu Ludo - the classic board game with friends and smart AI!"
+                        )
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "Share Jitu Ludo via"))
                 },
-                onOpenStats = {
-                    viewModel.playButtonClick()
-                    showStatsModal = true
-                },
-                onOpenWebView = {
-                    viewModel.playButtonClick()
-                    currentScreen = AppScreen.WEB_VIEW
-                }
+                modifier = modifier
             )
         }
+
         AppScreen.GAME -> {
             GameScreen(
                 gameState = gameState,
                 onRollDice = { viewModel.rollDice() },
                 onTokenClicked = { tokenId -> viewModel.selectToken(tokenId) },
                 onRestartGame = {
-                    viewModel.playButtonClick()
+                    val p1 = gameState.players.firstOrNull()
                     viewModel.startNewGame(
                         mode = gameState.gameMode,
                         playerCount = gameState.players.size,
-                        humanColor = gameState.players.firstOrNull { !it.isBot }?.color ?: com.example.model.PlayerColor.RED
+                        humanColor = p1?.color ?: PlayerColor.RED,
+                        customNames = gameState.players.associate { it.color to it.name }
                     )
                 },
-                onNavigateHome = {
-                    viewModel.playButtonClick()
-                    currentScreen = AppScreen.HOME
-                },
+                onNavigateHome = { currentScreen = AppScreen.HOME },
                 onToggleSound = { viewModel.toggleSound() },
-                onOpenStats = {
-                    viewModel.playButtonClick()
-                    showStatsModal = true
-                }
+                onOpenStats = { showStatsDialog = true },
+                modifier = modifier
             )
         }
+
         AppScreen.WEB_VIEW -> {
             WebViewScreen(
-                onBackToNative = {
-                    viewModel.playButtonClick()
-                    currentScreen = AppScreen.HOME
-                }
+                onBackToNative = { currentScreen = AppScreen.HOME },
+                modifier = modifier
             )
         }
     }
 
-    if (showRulesModal) {
-        RulesDialog(onDismiss = {
-            viewModel.playButtonClick()
-            showRulesModal = false
-        })
+    if (showRulesDialog) {
+        RulesDialog(onDismiss = { showRulesDialog = false })
     }
 
-    if (showStatsModal) {
+    if (showStatsDialog) {
         StatisticsDialog(
             statsList = playerStats,
-            onResetStats = {
-                viewModel.playButtonClick()
-                viewModel.resetStats()
-            },
-            onDismiss = {
-                viewModel.playButtonClick()
-                showStatsModal = false
-            }
+            onResetStats = { viewModel.resetStats() },
+            onDismiss = { showStatsDialog = false }
         )
     }
 }

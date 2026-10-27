@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.VolumeUp
@@ -66,6 +67,7 @@ fun HomeScreen(
     onOpenRules: () -> Unit,
     onOpenStats: () -> Unit,
     onOpenWebView: () -> Unit,
+    onShareGame: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedMode by remember { mutableStateOf(GameMode.LOCAL_MULTIPLAYER) }
@@ -439,6 +441,34 @@ fun HomeScreen(
             Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(26.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text(text = "START GAME", fontSize = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Clearly visible Share Button
+        Button(
+            onClick = onShareGame,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .testTag("home_share_button"),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Share,
+                contentDescription = "Share Game",
+                modifier = Modifier.size(22.dp),
+                tint = Color.White
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "SHARE GAME",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                color = Color.White
+            )
         }
 
         Spacer(modifier = Modifier.height(10.dp))

@@ -303,6 +303,7 @@
     <h1>JITU LUDO</h1>
     <div style="display:flex; gap:8px; align-items:center;">
       <span id="mode-badge" class="badge">Pass & Play</span>
+      <button id="btn-share" class="btn-icon" title="Share Game">📤</button>
       <button id="btn-sound" class="btn-icon" title="Toggle Sound">🔊</button>
       <button id="btn-stats" class="btn-icon" title="Statistics">📊</button>
       <button id="btn-menu" class="btn-icon" title="New Game">⚙️</button>
@@ -362,6 +363,7 @@
       </div>
 
       <button id="btn-start-game" class="btn-start">START MATCH</button>
+      <button id="btn-share-modal" class="btn-start" style="margin-top:10px; background:#0284c7;">📤 SHARE GAME</button>
     </div>
   </div>
 
@@ -1467,6 +1469,32 @@
       renderStatsTable();
       document.getElementById('stats-modal').classList.remove('hidden');
     });
+
+    function shareGame() {
+      SoundFX.playButtonClick();
+      const shareUrl = "https://ais-pre-wvl6btpu2f7tifakcip5ft-447578213146.asia-southeast1.run.app";
+      if (navigator.share) {
+        navigator.share({
+          title: "Jitu Ludo",
+          text: "Play Jitu Ludo board game online with friends!",
+          url: shareUrl
+        }).catch(() => {});
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          alert("Jitu Ludo link copied to clipboard!\n" + shareUrl);
+        }).catch(() => {
+          alert("Play Jitu Ludo: " + shareUrl);
+        });
+      } else {
+        alert("Play Jitu Ludo: " + shareUrl);
+      }
+    }
+
+    const shareBtn = document.getElementById('btn-share');
+    if (shareBtn) shareBtn.addEventListener('click', shareGame);
+
+    const shareModalBtn = document.getElementById('btn-share-modal');
+    if (shareModalBtn) shareModalBtn.addEventListener('click', shareGame);
 
     document.getElementById('btn-play-again').addEventListener('click', () => {
       SoundFX.playButtonClick();

@@ -68,6 +68,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         botJob?.cancel()
         autoMoveJob?.cancel()
         captureDismissJob?.cancel()
+        moveJob?.cancel()
         isActionLocked = false
         hasRecordedGameCompletion = false
 
@@ -211,6 +212,8 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var moveJob: Job? = null
+
     fun selectToken(tokenId: Int) {
         if (isActionLocked) return
         val state = _gameState.value
@@ -222,32 +225,93 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         autoMoveJob = null
 
         isActionLocked = true
-        try {
-            executeTokenMove(tokenId)
-        } finally {
-            isActionLocked = false
+        moveJob?.cancel()
+        moveJob = viewModelScope.launch {
+            try {
+                executeAnimatedTokenMove(tokenId)
+            } finally {
+                isActionLocked = false
+            }
         }
     }
 
-    private fun executeTokenMove(tokenId: Int) {
-        val state = _gameState.value
-        val outcome = LudoEngine.executeMove(state, tokenId)
+    private suspend fun executeAnimatedTokenMove(tokenId: Int) {
+        val startState = _gameState.value
+        val player = startState.currentPlayer ?: return
+        val token = player.tokens.find { it.id == tokenId } ?: return
+        val roll = startState.diceState.value
 
-        // Play appropriate sound & haptics (respects sound setting)
+        if (!LudoEngine.canTokenMove(token, roll)) return
+
+        // Calculate the authoritative final outcome from the start state
+        val outcome = LudoEngine.executeMove(startState, tokenId)
+        if (outcome.updatedState == startState) return
+
+        // 1. Visibly animate intermediate squares (approx. 100ms per square)
+        when (val pos = token.position) {
+            is com.example.model.TokenPosition.InBase -> {
+                // Leaving base yard onto start square (step 0)
+                _gameState.update { current ->
+                    val updatedPlayers = current.players.map { p ->
+                        if (p.color == player.color) {
+                            p.copy(tokens = p.tokens.map { t ->
+                                if (t.id == tokenId) t.copy(position = com.example.model.TokenPosition.OnBoard(step = 0)) else t
+                            })
+                        } else p
+                    }
+                    current.copy(
+                        players = updatedPlayers,
+                        phase = TurnPhase.ANIMATING_MOVE,
+                        movableTokenIds = emptySet()
+                    )
+                }
+                soundManager.playMove(startState.soundEnabled, startState.hapticsEnabled)
+                delay(100)
+            }
+            is com.example.model.TokenPosition.OnBoard -> {
+                val startStep = pos.step
+                val targetStep = startStep + roll
+
+                for (s in (startStep + 1)..targetStep) {
+                    val intermediatePos = if (s >= com.example.logic.LudoBoardMap.MAX_STEPS) {
+                        com.example.model.TokenPosition.Finished
+                    } else {
+                        com.example.model.TokenPosition.OnBoard(step = s)
+                    }
+
+                    _gameState.update { current ->
+                        val updatedPlayers = current.players.map { p ->
+                            if (p.color == player.color) {
+                                p.copy(tokens = p.tokens.map { t ->
+                                    if (t.id == tokenId) t.copy(position = intermediatePos) else t
+                                })
+                            } else p
+                        }
+                        current.copy(
+                            players = updatedPlayers,
+                            phase = TurnPhase.ANIMATING_MOVE,
+                            movableTokenIds = emptySet()
+                        )
+                    }
+                    soundManager.playMove(startState.soundEnabled, startState.hapticsEnabled)
+                    delay(100) // 100ms per square (target: 80-120ms)
+                }
+            }
+            is com.example.model.TokenPosition.Finished -> {}
+        }
+
+        // 2. Token arrived at final square - trigger destination sounds & resolution
         when {
             outcome.capturedToken != null -> {
-                soundManager.playCapture(state.soundEnabled, state.hapticsEnabled)
+                soundManager.playCapture(startState.soundEnabled, startState.hapticsEnabled)
             }
             outcome.updatedState.isGameOver -> {
                 if (!hasRecordedGameCompletion) {
-                    soundManager.playVictory(state.soundEnabled, state.hapticsEnabled)
+                    soundManager.playVictory(startState.soundEnabled, startState.hapticsEnabled)
                 }
             }
             outcome.bonusReason?.contains("Home") == true -> {
-                soundManager.playHomeSafe(state.soundEnabled, state.hapticsEnabled)
-            }
-            else -> {
-                soundManager.playMove(state.soundEnabled, state.hapticsEnabled)
+                soundManager.playHomeSafe(startState.soundEnabled, startState.hapticsEnabled)
             }
         }
 
@@ -263,7 +327,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Feature 1: Dismiss capture emoji animation automatically after ~1.3 seconds
+        // Dismiss capture emoji animation automatically after ~1.3 seconds
         if (outcome.captureEvent != null) {
             captureDismissJob?.cancel()
             captureDismissJob = viewModelScope.launch {
@@ -354,6 +418,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         botJob?.cancel()
         autoMoveJob?.cancel()
         captureDismissJob?.cancel()
+        moveJob?.cancel()
         soundManager.release()
     }
 }
