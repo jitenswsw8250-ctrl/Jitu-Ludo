@@ -7,14 +7,17 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,7 +109,7 @@ fun GameScreen(
         onNavigateHome()
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .onGloballyPositioned { rootCoordinates = it }
@@ -120,6 +123,10 @@ fun GameScreen(
                 )
             )
     ) {
+        val screenHeight = maxHeight
+        // Calculate max available board height so that the board, dice controls, bottom actions, and reserved banner fit comfortably
+        val maxBoardDimension = (screenHeight - 200.dp).coerceAtLeast(240.dp)
+
         // Subtle Glowing Star Sparkles in Background (matching reference photo)
         BackgroundSparklesCanvas(
             boardBounds = boardBounds,
@@ -129,94 +136,63 @@ fun GameScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             val greenPlayer = gameState.players.find { it.color == PlayerColor.GREEN }
             val yellowPlayer = gameState.players.find { it.color == PlayerColor.YELLOW }
             val redPlayer = gameState.players.find { it.color == PlayerColor.RED }
             val bluePlayer = gameState.players.find { it.color == PlayerColor.BLUE }
 
-            // 1. TOP HEADER & PLAYER DICE CONTROLS (Green at Top-Left, Yellow at Top-Right)
-            Column(
+            // Balanced top spacer for vertical screen centering on tall Android screens
+            Spacer(modifier = Modifier.weight(1f))
+
+            // 1. TOP PLAYER DICE CONTROLS (Green at Top-Left, Yellow at Top-Right)
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 2.dp)
+                    .padding(top = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (greenPlayer != null) {
-                        PlayerDiceControl(
-                            player = greenPlayer,
-                            isCurrentTurn = gameState.currentPlayer?.color == PlayerColor.GREEN,
-                            turnPhase = gameState.phase,
-                            diceState = gameState.diceState,
-                            isGameOver = gameState.isGameOver,
-                            onRollDice = onRollDice,
-                            alignRight = false
-                        )
-                    } else {
-                        Spacer(modifier = Modifier.width(48.dp))
-                    }
-
-                    if (yellowPlayer != null) {
-                        PlayerDiceControl(
-                            player = yellowPlayer,
-                            isCurrentTurn = gameState.currentPlayer?.color == PlayerColor.YELLOW,
-                            turnPhase = gameState.phase,
-                            diceState = gameState.diceState,
-                            isGameOver = gameState.isGameOver,
-                            onRollDice = onRollDice,
-                            alignRight = true
-                        )
-                    } else {
-                        Spacer(modifier = Modifier.width(48.dp))
-                    }
+                if (greenPlayer != null) {
+                    PlayerDiceControl(
+                        player = greenPlayer,
+                        isCurrentTurn = gameState.currentPlayer?.color == PlayerColor.GREEN,
+                        turnPhase = gameState.phase,
+                        diceState = gameState.diceState,
+                        isGameOver = gameState.isGameOver,
+                        onRollDice = onRollDice,
+                        alignRight = false
+                    )
+                } else {
+                    Spacer(modifier = Modifier.width(48.dp))
                 }
 
-                // Compact Status Announcement Banner
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp)
-                        .testTag("status_banner"),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFF200F08).copy(alpha = 0.75f)
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(
-                        width = 1.dp,
-                        color = Color(0xFFF59E0B).copy(alpha = 0.4f)
+                if (yellowPlayer != null) {
+                    PlayerDiceControl(
+                        player = yellowPlayer,
+                        isCurrentTurn = gameState.currentPlayer?.color == PlayerColor.YELLOW,
+                        turnPhase = gameState.phase,
+                        diceState = gameState.diceState,
+                        isGameOver = gameState.isGameOver,
+                        onRollDice = onRollDice,
+                        alignRight = true
                     )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = gameState.statusMessage,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp,
-                            color = Color(0xFFFEF3C7),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                } else {
+                    Spacer(modifier = Modifier.width(48.dp))
                 }
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             // 2. THE LUDO BOARD (Responsive, square, centered, golden framed with 3D tokens)
             Box(
                 modifier = Modifier
-                    .weight(1f, fill = false)
-                    .widthIn(max = 440.dp)
+                    .fillMaxWidth()
+                    .widthIn(max = minOf(440.dp, maxBoardDimension))
                     .onGloballyPositioned { boardCoords ->
                         val root = rootCoordinates
                         if (root != null && root.isAttached && boardCoords.isAttached) {
@@ -236,11 +212,16 @@ fun GameScreen(
                 )
             }
 
+            // Direct 20–30 dp spacing positioning the active player's dice control directly below the board
+            Spacer(modifier = Modifier.height(24.dp))
+
             // 3. BOTTOM PLAYER DICE CONTROLS (Red at Bottom-Left, Blue at Bottom-Right)
+            // Positioned directly below the board with comfortable spacing and easy thumb access
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = 2.dp)
+                    .testTag("active_dice_controls_row"),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -290,11 +271,14 @@ fun GameScreen(
                 }
             }
 
+            // Balanced spacing to push bottom action bar down responsively while centering game content
+            Spacer(modifier = Modifier.weight(1f))
+
             // 4. BOTTOM ACTION BAR (Circular vibrant green buttons matching reference photo)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -335,11 +319,25 @@ fun GameScreen(
                     )
                 }
 
-                // Right action buttons: Run/Stats and Settings Gear
+                // Right action buttons: Sound Mute/Unmute, Statistics, and Settings Gear
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    CircularGreenButton(
+                        icon = {
+                            Icon(
+                                imageVector = if (gameState.soundEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                                contentDescription = if (gameState.soundEnabled) "Mute Sound" else "Unmute Sound",
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        },
+                        onClick = onToggleSound,
+                        contentDescription = "Sound Toggle",
+                        testTag = "game_quick_sound_button"
+                    )
+
                     CircularGreenButton(
                         icon = {
                             Icon(
@@ -368,6 +366,21 @@ fun GameScreen(
                         testTag = "game_settings_button"
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // 5. RESERVED BANNER ADVERTISEMENT AREA
+            // Dedicated empty space near the bottom for future banner ads.
+            // Separated completely from bottom navigation buttons to prevent overlap.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .testTag("reserved_banner_ad_area"),
+                contentAlignment = Alignment.Center
+            ) {
+                // Future banner advertisement space
             }
         }
     }

@@ -218,6 +218,8 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         if (isActionLocked) return
         val state = _gameState.value
         if (state.phase != TurnPhase.SELECTING_TOKEN || state.isGameOver) return
+        // Prevent accidental human taps from interrupting a bot's turn
+        if (state.currentPlayer?.isBot == true) return
         if (!state.movableTokenIds.contains(tokenId)) return
 
         // Prevent duplicate movement: cancel any scheduled auto-move
@@ -359,7 +361,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         _playerStats.value = statsRepository.getAllStats()
     }
 
-    private fun checkBotTurn(delayMs: Long = 500) {
+    private fun checkBotTurn(delayMs: Long = 450) {
         val state = _gameState.value
         if (state.isGameOver) return
 
@@ -368,25 +370,96 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
             botJob?.cancel()
             botJob = viewModelScope.launch {
                 delay(delayMs)
-                if (_gameState.value.phase == TurnPhase.WAITING_FOR_ROLL && !isActionLocked) {
+                // Wait for any prior animation lock to clear
+                var waitCount = 0
+                while (isActionLocked && waitCount < 30) {
+                    delay(50)
+                    waitCount++
+                }
+
+                val curState = _gameState.value
+                if (!curState.isGameOver &&
+                    curState.phase == TurnPhase.WAITING_FOR_ROLL &&
+                    curState.currentPlayer?.isBot == true &&
+                    !curState.diceState.isRolling
+                ) {
                     rollDice()
                 }
             }
         }
     }
 
-    private fun scheduleBotMove(delayMs: Long = 600) {
-        val state = _gameState.value
-        val botPlayer = state.currentPlayer ?: return
-        if (!botPlayer.isBot) return
-
+    private fun scheduleBotMove(delayMs: Long = 420) {
         botJob?.cancel()
         botJob = viewModelScope.launch {
             delay(delayMs)
-            val roll = _gameState.value.diceState.value
-            val chosenToken = LudoEngine.pickBestBotToken(_gameState.value, botPlayer, roll)
-            if (chosenToken != null && !isActionLocked) {
-                selectToken(chosenToken.id)
+
+            // Wait for any prior animation lock to clear
+            var waitCount = 0
+            while (isActionLocked && waitCount < 30) {
+                delay(50)
+                waitCount++
+            }
+
+            val curState = _gameState.value
+            if (curState.isGameOver) return@launch
+            val curPlayer = curState.currentPlayer ?: return@launch
+            if (!curPlayer.isBot) return@launch
+
+            if (curState.phase != TurnPhase.SELECTING_TOKEN) {
+                if (curState.phase == TurnPhase.WAITING_FOR_ROLL) {
+                    rollDice()
+                }
+                return@launch
+            }
+
+            val movableIds = curState.movableTokenIds
+            if (movableIds.isEmpty()) {
+                // If no legal moves available, safely advance turn to prevent getting stuck
+                val nextTurnIndex = LudoEngine.getNextActivePlayerIndex(curState.players, curState.currentTurnIndex)
+                val nextPlayer = curState.players[nextTurnIndex]
+                _gameState.update {
+                    it.copy(
+                        currentTurnIndex = nextTurnIndex,
+                        phase = TurnPhase.WAITING_FOR_ROLL,
+                        movableTokenIds = emptySet(),
+                        statusMessage = "${nextPlayer.name}'s turn. Roll the dice!"
+                    )
+                }
+                soundManager.playTurnChange(_gameState.value.soundEnabled)
+                checkBotTurn(delayMs = 450)
+                return@launch
+            }
+
+            // Always select and execute a legal move using fresh state and bot player
+            val roll = curState.diceState.value
+            val chosenToken = LudoEngine.pickBestBotToken(curState, curPlayer, roll)
+            val selectedTokenId = if (chosenToken != null && chosenToken.id in movableIds) {
+                chosenToken.id
+            } else {
+                // Guaranteed fallback: pick the first eligible token from movableIds
+                curPlayer.tokens.firstOrNull { it.id in movableIds }?.id ?: movableIds.first()
+            }
+
+            executeBotMove(selectedTokenId)
+        }
+    }
+
+    private fun executeBotMove(tokenId: Int) {
+        val state = _gameState.value
+        if (state.phase != TurnPhase.SELECTING_TOKEN || state.isGameOver) return
+        if (!state.movableTokenIds.contains(tokenId)) return
+
+        autoMoveJob?.cancel()
+        autoMoveJob = null
+
+        isActionLocked = true
+        moveJob?.cancel()
+        moveJob = viewModelScope.launch {
+            try {
+                executeAnimatedTokenMove(tokenId)
+            } finally {
+                isActionLocked = false
             }
         }
     }

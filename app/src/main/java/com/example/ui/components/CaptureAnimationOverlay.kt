@@ -34,6 +34,16 @@ import androidx.compose.ui.unit.sp
 import com.example.model.CaptureAnimationEvent
 import kotlin.math.roundToInt
 
+import androidx.compose.ui.text.style.TextAlign
+
+object CaptureAnimationDimensions {
+    const val BADGE_DIAMETER_CELL_RATIO = 2.0f
+    const val EMOJI_TO_BADGE_RATIO = 0.50f
+
+    fun calculateBadgeDiameterPx(cellSize: Float): Float = cellSize * BADGE_DIAMETER_CELL_RATIO
+    fun calculateEmojiFontSizePx(cellSize: Float): Float = calculateBadgeDiameterPx(cellSize) * EMOJI_TO_BADGE_RATIO
+}
+
 @Composable
 fun CaptureAnimationOverlay(
     event: CaptureAnimationEvent,
@@ -75,8 +85,11 @@ fun CaptureAnimationOverlay(
         label = "dizzyShake"
     )
 
-    val badgeSizeDp = with(LocalDensity.current) { (cellSize * 1.8f).toDp() }
-    val emojiFontSize = (cellSize * 0.85f).sp
+    val density = LocalDensity.current
+    val badgeDiameterPx = CaptureAnimationDimensions.calculateBadgeDiameterPx(cellSize)
+    val badgeHalfPx = badgeDiameterPx / 2f
+    val badgeSizeDp = with(density) { badgeDiameterPx.toDp() }
+    val emojiFontSize = with(density) { CaptureAnimationDimensions.calculateEmojiFontSizePx(cellSize).toSp() }
 
     Box(
         modifier = modifier
@@ -86,7 +99,6 @@ fun CaptureAnimationOverlay(
         // 1. Capturing Player's Celebratory Emoji at Capture location
         val capturePxX = event.captureBoardCoord.x * cellSize
         val capturePxY = event.captureBoardCoord.y * cellSize
-        val badgeHalfPx = (cellSize * 1.8f) / 2f
 
         Box(
             modifier = Modifier
@@ -101,15 +113,16 @@ fun CaptureAnimationOverlay(
                     scaleX = popScale * celebrateBounce
                     scaleY = popScale * celebrateBounce
                 }
+                .background(Color(0xFF1E293B).copy(alpha = 0.95f), CircleShape)
+                .border(2.5.dp, Color(0xFFFBBF24), CircleShape)
                 .clip(CircleShape)
-                .background(Color(0xFF1E293B).copy(alpha = 0.92f))
-                .border(2.dp, Color(0xFFFBBF24), CircleShape)
                 .testTag("capturing_home_emoji"),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = event.capturingEmoji,
-                fontSize = emojiFontSize
+                fontSize = emojiFontSize,
+                textAlign = TextAlign.Center
             )
         }
 
@@ -131,15 +144,16 @@ fun CaptureAnimationOverlay(
                     scaleY = popScale
                     rotationZ = dizzyShake
                 }
+                .background(Color(0xFF0F172A).copy(alpha = 0.95f), CircleShape)
+                .border(2.5.dp, Color(0xFFEF4444), CircleShape)
                 .clip(CircleShape)
-                .background(Color(0xFF0F172A).copy(alpha = 0.90f))
-                .border(2.dp, Color(0xFFEF4444), CircleShape)
                 .testTag("captured_home_emoji"),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = event.capturedEmoji,
-                fontSize = emojiFontSize
+                fontSize = emojiFontSize,
+                textAlign = TextAlign.Center
             )
         }
     }

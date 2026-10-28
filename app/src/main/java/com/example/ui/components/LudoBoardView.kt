@@ -139,10 +139,10 @@ fun LudoBoardView(
                                         } else {
                                             val laneIdx = step - 51
                                             when (token.color) {
-                                                PlayerColor.RED -> listOf(GridCoord(13, 7), GridCoord(12, 7), GridCoord(11, 7), GridCoord(10, 7), GridCoord(9, 7))
-                                                PlayerColor.GREEN -> listOf(GridCoord(7, 1), GridCoord(7, 2), GridCoord(7, 3), GridCoord(7, 4), GridCoord(7, 5))
-                                                PlayerColor.YELLOW -> listOf(GridCoord(1, 7), GridCoord(2, 7), GridCoord(3, 7), GridCoord(4, 7), GridCoord(5, 7))
-                                                PlayerColor.BLUE -> listOf(GridCoord(7, 13), GridCoord(7, 12), GridCoord(7, 11), GridCoord(7, 10), GridCoord(7, 9))
+                                                PlayerColor.RED -> LudoBoardMap.RED_HOME_LANE
+                                                PlayerColor.GREEN -> LudoBoardMap.GREEN_HOME_LANE
+                                                PlayerColor.YELLOW -> LudoBoardMap.YELLOW_HOME_LANE
+                                                PlayerColor.BLUE -> LudoBoardMap.BLUE_HOME_LANE
                                             }.getOrNull(laneIdx)
                                         }
 
@@ -581,10 +581,10 @@ private fun DrawScope.drawTrackCells(cellSize: Float) {
 
         // Starting squares get soft pastel accent, safe star squares soft violet, others clean crisp off-white
         val cellColor = when (index) {
-            0 -> Color(0xFFFFE4E6)  // Red start (13, 6)
-            13 -> Color(0xFFDCFCE7) // Green start (6, 1)
-            26 -> Color(0xFFFEF9C3) // Yellow start (1, 8)
-            39 -> Color(0xFFDBEAFE) // Blue start (8, 13)
+            0 -> Color(0xFFFFE4E6)  // Red start (6, 13)
+            13 -> Color(0xFFDCFCE7) // Green start (1, 6)
+            26 -> Color(0xFFFEF9C3) // Yellow start (8, 1)
+            39 -> Color(0xFFDBEAFE) // Blue start (13, 8)
             8, 21, 34, 47 -> Color(0xFFEDE9FE) // Star safe cells
             else -> Color(0xFFF8FAFC)
         }
@@ -650,10 +650,10 @@ private fun DrawScope.drawTrackCells(cellSize: Float) {
     }
 
     // 2. Draw Home Lanes (5 cells per player with saturated jewel tones and dark dividing borders)
-    drawHomeLane(listOf(13 to 7, 12 to 7, 11 to 7, 10 to 7, 9 to 7), Color(0xFFDC2626), cellSize, trackBorderColor) // Red (Bottom Arm)
-    drawHomeLane(listOf(7 to 1, 7 to 2, 7 to 3, 7 to 4, 7 to 5), Color(0xFF16A34A), cellSize, trackBorderColor)       // Green (Left Arm)
-    drawHomeLane(listOf(1 to 7, 2 to 7, 3 to 7, 4 to 7, 5 to 7), Color(0xFFCA8A04), cellSize, trackBorderColor)       // Yellow (Top Arm)
-    drawHomeLane(listOf(7 to 13, 7 to 12, 7 to 11, 7 to 10, 7 to 9), Color(0xFF2563EB), cellSize, trackBorderColor)   // Blue (Right Arm)
+    drawHomeLane(LudoBoardMap.RED_HOME_LANE, Color(0xFFDC2626), cellSize, trackBorderColor) // Red (Bottom Arm)
+    drawHomeLane(LudoBoardMap.GREEN_HOME_LANE, Color(0xFF16A34A), cellSize, trackBorderColor) // Green (Left Arm)
+    drawHomeLane(LudoBoardMap.YELLOW_HOME_LANE, Color(0xFFCA8A04), cellSize, trackBorderColor) // Yellow (Top Arm)
+    drawHomeLane(LudoBoardMap.BLUE_HOME_LANE, Color(0xFF2563EB), cellSize, trackBorderColor) // Blue (Right Arm)
 }
 
 enum class ArrowDirection { UP, DOWN, LEFT, RIGHT }
@@ -687,13 +687,13 @@ private fun DrawScope.drawArrow(center: Offset, size: Float, direction: ArrowDir
 }
 
 private fun DrawScope.drawHomeLane(
-    coords: List<Pair<Int, Int>>,
+    coords: List<GridCoord>,
     color: Color,
     cellSize: Float,
     strokeColor: Color
 ) {
-    for ((row, col) in coords) {
-        val topLeft = Offset(col * cellSize, row * cellSize)
+    for (coord in coords) {
+        val topLeft = Offset(coord.col * cellSize, coord.row * cellSize)
         val cellCenter = Offset(topLeft.x + cellSize / 2f, topLeft.y + cellSize / 2f)
 
         drawRect(color = color, topLeft = topLeft, size = Size(cellSize, cellSize))
