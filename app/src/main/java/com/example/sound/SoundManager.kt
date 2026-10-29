@@ -73,28 +73,21 @@ class SoundManager(private val context: Context) {
     }
 
     init {
-        ensureAudibleVolume()
         initAudioEngine()
     }
 
     /**
-     * Checks device media volume and unmutes if STREAM_MUSIC is currently muted or set to 0.
-     * Prevents silence in headless Android container previews.
+     * Checks if the device media volume is currently audible (> 0).
+     * If the user sets media volume to 0 or mutes the stream, game sounds remain inaudible
+     * without ever modifying or raising the user's system volume settings.
      */
-    private fun ensureAudibleVolume() {
-        try {
-            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            audioManager?.let { am ->
-                val currentVol = am.getStreamVolume(AudioManager.STREAM_MUSIC)
-                val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                if (currentVol <= 0 && maxVol > 0) {
-                    val targetVol = (maxVol * 0.85).toInt().coerceAtLeast(1)
-                    am.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
-                    Log.i(tag, "Adjusted STREAM_MUSIC from 0 to $targetVol/$maxVol for audible playback")
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(tag, "Could not adjust system audio volume: ${e.message}")
+    private fun isMediaVolumeAudible(): Boolean {
+        return try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return true
+            val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            currentVol > 0
+        } catch (_: Exception) {
+            true
         }
     }
 
@@ -158,48 +151,41 @@ class SoundManager(private val context: Context) {
 
     fun playDiceRoll(soundEnabled: Boolean, hapticsEnabled: Boolean) {
         if (hapticsEnabled) vibrate(35)
-        if (!soundEnabled) return
-        ensureAudibleVolume()
+        if (!soundEnabled || !isMediaVolumeAudible()) return
         playSound(SoundType.DICE_ROLL, volume = 0.95f)
     }
 
     fun playMove(soundEnabled: Boolean, hapticsEnabled: Boolean) {
         if (hapticsEnabled) vibrate(22)
-        if (!soundEnabled) return
-        ensureAudibleVolume()
+        if (!soundEnabled || !isMediaVolumeAudible()) return
         playSound(SoundType.TOKEN_MOVE, volume = 0.80f)
     }
 
     fun playCapture(soundEnabled: Boolean, hapticsEnabled: Boolean) {
         if (hapticsEnabled) vibratePattern(longArrayOf(0, 50, 40, 90))
-        if (!soundEnabled) return
-        ensureAudibleVolume()
+        if (!soundEnabled || !isMediaVolumeAudible()) return
         playSound(SoundType.TOKEN_CAPTURE, volume = 0.95f)
     }
 
     fun playHomeSafe(soundEnabled: Boolean, hapticsEnabled: Boolean) {
         if (hapticsEnabled) vibrate(45)
-        if (!soundEnabled) return
-        ensureAudibleVolume()
+        if (!soundEnabled || !isMediaVolumeAudible()) return
         playSound(SoundType.TOKEN_HOME, volume = 0.90f)
     }
 
     fun playVictory(soundEnabled: Boolean, hapticsEnabled: Boolean) {
         if (hapticsEnabled) vibratePattern(longArrayOf(0, 80, 50, 80, 50, 220))
-        if (!soundEnabled) return
-        ensureAudibleVolume()
+        if (!soundEnabled || !isMediaVolumeAudible()) return
         playSound(SoundType.VICTORY, volume = 0.95f)
     }
 
     fun playButtonClick(soundEnabled: Boolean) {
-        if (!soundEnabled) return
-        ensureAudibleVolume()
+        if (!soundEnabled || !isMediaVolumeAudible()) return
         playSound(SoundType.BUTTON_CLICK, volume = 0.60f)
     }
 
     fun playTurnChange(soundEnabled: Boolean) {
-        if (!soundEnabled) return
-        ensureAudibleVolume()
+        if (!soundEnabled || !isMediaVolumeAudible()) return
         playSound(SoundType.TURN_CHANGE, volume = 0.70f)
     }
 
@@ -269,7 +255,7 @@ class SoundManager(private val context: Context) {
             val track = AudioTrack.Builder()
                 .setAudioAttributes(
                     AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setUsage(AudioAttributes.USAGE_GAME)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build()
                 )
@@ -307,6 +293,7 @@ class SoundManager(private val context: Context) {
     }
 
     private fun playToneGeneratorFallback(type: SoundType) {
+        if (!isMediaVolumeAudible()) return
         try {
             val toneType = when (type) {
                 SoundType.DICE_ROLL -> ToneGenerator.TONE_PROP_BEEP
@@ -317,7 +304,7 @@ class SoundManager(private val context: Context) {
                 SoundType.BUTTON_CLICK -> ToneGenerator.TONE_PROP_PROMPT
                 SoundType.TURN_CHANGE -> ToneGenerator.TONE_PROP_BEEP
             }
-            val tg = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
+            val tg = ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME)
             tg.startTone(toneType, 120)
             scope.launch {
                 delay(150)

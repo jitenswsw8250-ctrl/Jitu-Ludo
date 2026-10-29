@@ -23,8 +23,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -33,8 +35,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -327,7 +327,7 @@ fun GameScreen(
                     CircularGreenButton(
                         icon = {
                             Icon(
-                                imageVector = if (gameState.soundEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                                imageVector = if (gameState.soundEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                                 contentDescription = if (gameState.soundEnabled) "Mute Sound" else "Unmute Sound",
                                 tint = Color.White,
                                 modifier = Modifier.size(22.dp)
@@ -420,7 +420,7 @@ fun GameScreen(
                         )
                     ) {
                         Icon(
-                            imageVector = if (gameState.soundEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                            imageVector = if (gameState.soundEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                             contentDescription = "Sound Toggle",
                             tint = Color.White
                         )
@@ -442,7 +442,7 @@ fun GameScreen(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
                     ) {
-                        Icon(Icons.Default.HelpOutline, contentDescription = "Game Rules", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = "Game Rules", tint = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("How to Play", color = Color.White)
                     }
