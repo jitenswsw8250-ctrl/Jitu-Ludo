@@ -63,14 +63,20 @@ fun StatisticsDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(24.dp))
-                .background(Color(0xFF0F172A))
-                .border(2.dp, Brush.verticalGradient(listOf(Color(0xFF38BDF8), Color(0xFF1E3A8A))), RoundedCornerShape(24.dp))
+                .background(Color(0xFF160A05))
+                .border(
+                    2.dp,
+                    Brush.verticalGradient(
+                        listOf(Color(0xFFFDE047), Color(0xFFF59E0B), Color(0xFF78350F))
+                    ),
+                    RoundedCornerShape(24.dp)
+                )
                 .testTag("statistics_dialog")
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp)
+                    .padding(18.dp)
             ) {
                 // Header
                 Row(
@@ -81,15 +87,15 @@ fun StatisticsDialog(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
                             shape = CircleShape,
-                            color = Color(0xFF0284C7).copy(alpha = 0.2f),
-                            modifier = Modifier.size(36.dp)
+                            color = Color(0xFFF59E0B).copy(alpha = 0.2f),
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.BarChart,
                                     contentDescription = null,
-                                    tint = Color(0xFF38BDF8),
-                                    modifier = Modifier.size(22.dp)
+                                    tint = Color(0xFFFDE047),
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
@@ -103,9 +109,9 @@ fun StatisticsDialog(
                                 letterSpacing = 1.sp
                             )
                             Text(
-                                text = "Persistent Match History",
+                                text = "Completed Match Records",
                                 fontSize = 11.sp,
-                                color = Color(0xFF94A3B8)
+                                color = Color(0xFFCBD5E1)
                             )
                         }
                     }
@@ -117,79 +123,39 @@ fun StatisticsDialog(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
-                            tint = Color(0xFF94A3B8)
+                            tint = Color(0xFFCBD5E1)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Table Header
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF1E293B))
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "PLAYER",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF94A3B8)
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text(
-                            text = "GAMES",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF94A3B8)
-                        )
-                        Text(
-                            text = "WINS",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF94A3B8)
-                        )
-                        Text(
-                            text = "WIN %",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF38BDF8)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Stats List or Empty State
                 if (statsList.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(160.dp),
+                            .height(180.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
                                 imageVector = Icons.Default.EmojiEvents,
                                 contentDescription = null,
-                                tint = Color(0xFF64748B),
-                                modifier = Modifier.size(36.dp)
+                                tint = Color(0xFF78350F),
+                                modifier = Modifier.size(44.dp)
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "No completed matches yet",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF94A3B8)
+                                text = "No completed games yet",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
                             Text(
-                                text = "Finish a match to record your winning stats!",
+                                text = "Finish any match to record wins, losses & captures!",
                                 fontSize = 11.sp,
-                                color = Color(0xFF64748B)
+                                color = Color(0xFF94A3B8)
                             )
                         }
                     }
@@ -197,86 +163,83 @@ fun StatisticsDialog(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(220.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                            .height(260.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(statsList) { record ->
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = Color(0xFF1E293B).copy(alpha = 0.8f)
+                                    containerColor = Color(0xFF261208).copy(alpha = 0.95f)
                                 ),
                                 border = androidx.compose.foundation.BorderStroke(
                                     width = 1.dp,
-                                    color = record.color.primaryColor.copy(alpha = 0.4f)
+                                    color = record.color.primaryColor.copy(alpha = 0.5f)
                                 )
                             ) {
-                                Row(
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .padding(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    // Player Name & Color
+                                    // Row 1: Player Name, Color badge, Bot tag, and Win Rate Pill
                                     Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(14.dp)
-                                                .clip(CircleShape)
-                                                .background(record.color.primaryColor)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(14.dp)
+                                                    .clip(CircleShape)
+                                                    .background(record.color.primaryColor)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
                                             Text(
                                                 text = record.name,
                                                 fontWeight = FontWeight.Bold,
-                                                fontSize = 13.sp,
+                                                fontSize = 14.sp,
                                                 color = Color.White
                                             )
                                             if (record.isBot) {
+                                                Spacer(modifier = Modifier.width(6.dp))
                                                 Text(
-                                                    text = "AI Computer",
-                                                    fontSize = 9.sp,
-                                                    color = Color(0xFFA855F7)
+                                                    text = "(AI Bot)",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = Color(0xFF38BDF8)
                                                 )
                                             }
                                         }
-                                    }
 
-                                    // Numerical Stats
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "${record.completedGames}",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFFCBD5E1)
-                                        )
-                                        Text(
-                                            text = "${record.wins}",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFFFBBF24)
-                                        )
+                                        // Win Rate Badge
                                         Surface(
                                             shape = RoundedCornerShape(6.dp),
-                                            color = if (record.wins > 0) Color(0xFF065F46) else Color(0xFF334155)
+                                            color = if (record.wins > 0) Color(0xFF166534) else Color(0xFF334155)
                                         ) {
                                             Text(
-                                                text = " ${record.winPercentageFormatted} ",
-                                                fontSize = 12.sp,
+                                                text = " ${record.winPercentageFormatted} Win Rate ",
+                                                fontSize = 11.sp,
                                                 fontWeight = FontWeight.Black,
-                                                color = if (record.wins > 0) Color(0xFF34D399) else Color(0xFF94A3B8),
+                                                color = if (record.wins > 0) Color(0xFF86EFAC) else Color(0xFFCBD5E1),
                                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                             )
                                         }
+                                    }
+
+                                    // Row 2: Metrics chips: Games, Wins, Losses, Captures
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        StatMetricChip(label = "GAMES", value = "${record.completedGames}", color = Color(0xFFE2E8F0))
+                                        StatMetricChip(label = "WINS", value = "${record.wins}", color = Color(0xFFFBBF24))
+                                        StatMetricChip(label = "LOSSES", value = "${record.losses}", color = Color(0xFFF87171))
+                                        StatMetricChip(label = "CAPTURES", value = "${record.captures} ⚔️", color = Color(0xFF38BDF8))
                                     }
                                 }
                             }
@@ -318,10 +281,10 @@ fun StatisticsDialog(
                             .weight(1f)
                             .height(46.dp)
                             .testTag("stats_done_button"),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text(text = "Done", fontWeight = FontWeight.Bold)
+                        Text(text = "Done", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
@@ -349,7 +312,7 @@ fun StatisticsDialog(
             },
             text = {
                 Text(
-                    text = "Are you sure you want to reset all player stats? This will permanently clear completed game counts and win percentages.",
+                    text = "Are you sure you want to reset all player stats? This will permanently clear completed game counts, wins, losses, captures, and win rates.",
                     color = Color(0xFFCBD5E1),
                     fontSize = 13.sp
                 )
@@ -374,8 +337,31 @@ fun StatisticsDialog(
                     Text(text = "Cancel", color = Color(0xFF94A3B8))
                 }
             },
-            containerColor = Color(0xFF1E293B),
+            containerColor = Color(0xFF1E0E07),
             shape = RoundedCornerShape(18.dp)
+        )
+    }
+}
+
+@Composable
+private fun StatMetricChip(
+    label: String,
+    value: String,
+    color: Color
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = label,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF94A3B8),
+            letterSpacing = 0.5.sp
+        )
+        Text(
+            text = value,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+            color = color
         )
     }
 }

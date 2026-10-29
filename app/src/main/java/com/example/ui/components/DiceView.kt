@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.DiceState
+import com.example.model.GameSkin
 import com.example.model.Player
 import com.example.model.TurnPhase
 
@@ -75,7 +76,8 @@ fun PlayerDiceControl(
     isGameOver: Boolean,
     onRollDice: () -> Unit,
     modifier: Modifier = Modifier,
-    alignRight: Boolean = false
+    alignRight: Boolean = false,
+    skin: GameSkin = GameSkin.CLASSIC
 ) {
     val canRoll = isCurrentTurn && !isGameOver && (turnPhase == TurnPhase.WAITING_FOR_ROLL) && !player.isBot && !diceState.isRolling
     val isBotThinking = isCurrentTurn && !isGameOver && player.isBot
@@ -152,6 +154,7 @@ fun PlayerDiceControl(
                     enabled = canRoll,
                     onClick = onRollDice,
                     diceSizeDp = 46.dp,
+                    skin = skin,
                     modifier = if (canRoll) Modifier.testTag("roll_dice_button") else Modifier
                 )
 
@@ -189,6 +192,7 @@ fun PlayerDiceControl(
                     enabled = canRoll,
                     onClick = onRollDice,
                     diceSizeDp = 46.dp,
+                    skin = skin,
                     modifier = if (canRoll) Modifier.testTag("roll_dice_button") else Modifier
                 )
 
@@ -232,7 +236,8 @@ fun DiceControlSection(
     turnPhase: TurnPhase,
     isGameOver: Boolean,
     onRollDice: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    skin: GameSkin = GameSkin.CLASSIC
 ) {
     val canRoll = !isGameOver && (turnPhase == TurnPhase.WAITING_FOR_ROLL) && (player?.isBot == false) && !diceState.isRolling
 
@@ -303,7 +308,8 @@ fun DiceControlSection(
                     isRolling = diceState.isRolling,
                     accentColor = player?.color?.primaryColor ?: Color(0xFFE53935),
                     enabled = canRoll,
-                    onClick = onRollDice
+                    onClick = onRollDice,
+                    skin = skin
                 )
 
                 if (canRoll) {
@@ -398,30 +404,51 @@ fun DiceFace(
     enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    diceSizeDp: Dp = 54.dp
+    diceSizeDp: Dp = 54.dp,
+    skin: GameSkin = GameSkin.CLASSIC
 ) {
-    val rotation = remember { Animatable(0f) }
+    val rotationZ = remember { Animatable(0f) }
+    val rotationX = remember { Animatable(0f) }
     val scale = remember { Animatable(1f) }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "sixGlowPulse")
+    val sixGlowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.40f,
+        targetValue = 0.90f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(650, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "sixGlow"
+    )
 
     LaunchedEffect(isRolling) {
         if (isRolling) {
-            rotation.animateTo(
-                targetValue = rotation.value + 360f,
-                animationSpec = tween(durationMillis = 360, easing = LinearEasing)
+            rotationZ.animateTo(
+                targetValue = rotationZ.value + 360f,
+                animationSpec = tween(durationMillis = 320, easing = LinearEasing)
             )
-            scale.animateTo(1.15f, tween(180))
-            scale.animateTo(1.0f, tween(180))
+            rotationX.animateTo(25f, tween(160, easing = FastOutSlowInEasing))
+            rotationX.animateTo(0f, tween(160, easing = FastOutSlowInEasing))
+            scale.animateTo(1.15f, tween(160))
+            scale.animateTo(1.0f, tween(160))
         }
     }
+
+    val isSixRolled = value == 6 && !isRolling
 
     Box(
         modifier = modifier
             .size(diceSizeDp)
             .scale(scale.value)
-            .rotate(rotation.value)
+            .graphicsLayer {
+                this.rotationZ = rotationZ.value
+                this.rotationX = rotationX.value
+                this.cameraDistance = 12f * density
+            }
             .clip(RoundedCornerShape(12.dp))
             .clickable(
-                enabled = enabled,
+                enabled = enabled && !isRolling,
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             ) { onClick() }
@@ -433,6 +460,24 @@ fun DiceFace(
             val pad = dSize * 0.06f
             val corner = dSize * 0.24f
 
+            // 0. Golden Glow Halo when a six is rolled!
+            if (isSixRolled) {
+                drawRoundRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFFFFD700).copy(alpha = sixGlowAlpha),
+                            Color(0xFFF59E0B).copy(alpha = sixGlowAlpha * 0.6f),
+                            Color.Transparent
+                        ),
+                        center = Offset(dSize / 2f, dSize / 2f),
+                        radius = dSize * 0.72f
+                    ),
+                    topLeft = Offset(-2f, -2f),
+                    size = Size(dSize + 4f, dSize + 4f),
+                    cornerRadius = CornerRadius(corner * 1.1f, corner * 1.1f)
+                )
+            }
+
             // 1. Outer Dark Bezel / Shadow
             drawRoundRect(
                 color = Color(0x66000000),
@@ -441,10 +486,18 @@ fun DiceFace(
                 cornerRadius = CornerRadius(corner, corner)
             )
 
-            // 2. Outer Bezel Border (Dark Sapphire/Navy frame matching photo)
+            // 2. Outer Bezel Border (Skin customized)
+            val bezelColors = when (skin) {
+                GameSkin.CLASSIC -> listOf(Color(0xFF1E3A8A), Color(0xFF0F172A), Color(0xFF1E3A8A))
+                GameSkin.RUBY -> listOf(Color(0xFF9F1239), Color(0xFF4C0519), Color(0xFF9F1239))
+                GameSkin.EMERALD -> listOf(Color(0xFF065F46), Color(0xFF022C22), Color(0xFF065F46))
+                GameSkin.SAPPHIRE -> listOf(Color(0xFF1E40AF), Color(0xFF0F172A), Color(0xFF1E40AF))
+                GameSkin.GOLD -> listOf(Color(0xFFB45309), Color(0xFF451A03), Color(0xFFB45309))
+                GameSkin.SILVER -> listOf(Color(0xFF475569), Color(0xFF0F172A), Color(0xFF475569))
+            }
             drawRoundRect(
                 brush = Brush.linearGradient(
-                    colors = listOf(Color(0xFF1E3A8A), Color(0xFF0F172A), Color(0xFF1E3A8A)),
+                    colors = bezelColors,
                     start = Offset(0f, 0f),
                     end = Offset(dSize, dSize)
                 ),
@@ -453,37 +506,42 @@ fun DiceFace(
                 cornerRadius = CornerRadius(corner, corner)
             )
 
-            // 3. Golden Die Face Base with 3D gradient
+            // 3. Die Face Base with 3D gradient
             val innerPad = pad * 1.8f
+            val faceColors = when (skin) {
+                GameSkin.CLASSIC -> listOf(Color(0xFFFFFBEB), Color(0xFFFDE68A), Color(0xFFF59E0B), Color(0xFFD97706))
+                GameSkin.RUBY -> listOf(Color(0xFFFFF1F2), Color(0xFFFDA4AF), Color(0xFFF43F5E), Color(0xFFBE123C))
+                GameSkin.EMERALD -> listOf(Color(0xFFF0FDF4), Color(0xFFA7F3D0), Color(0xFF10B981), Color(0xFF047857))
+                GameSkin.SAPPHIRE -> listOf(Color(0xFFEFF6FF), Color(0xFFBAE6FD), Color(0xFF38BDF8), Color(0xFF0284C7))
+                GameSkin.GOLD -> listOf(Color(0xFFFEFCE8), Color(0xFFFEF08A), Color(0xFFFACC15), Color(0xFFCA8A04))
+                GameSkin.SILVER -> listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9), Color(0xFFCBD5E1), Color(0xFF64748B))
+            }
+
             drawRoundRect(
                 brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFFFFBEB),
-                        Color(0xFFFDE68A),
-                        Color(0xFFF59E0B),
-                        Color(0xFFD97706)
-                    )
+                    colors = faceColors
                 ),
                 topLeft = Offset(innerPad, innerPad),
                 size = Size(dSize - innerPad * 2, dSize - innerPad * 2),
                 cornerRadius = CornerRadius(corner * 0.8f, corner * 0.8f)
             )
 
-            // 4. Golden Inner Rim Bevel
+            // 4. Inner Rim Bevel Stroke
+            val rimStrokeColor = if (isSixRolled) Color(0xFFFFD700) else Color.White.copy(alpha = 0.85f)
             drawRoundRect(
                 brush = Brush.linearGradient(
-                    colors = listOf(Color.White.copy(alpha = 0.9f), Color(0xFFB45309)),
+                    colors = listOf(rimStrokeColor, skin.rimTone),
                     start = Offset(innerPad, innerPad),
                     end = Offset(dSize - innerPad, dSize - innerPad)
                 ),
                 topLeft = Offset(innerPad, innerPad),
                 size = Size(dSize - innerPad * 2, dSize - innerPad * 2),
                 cornerRadius = CornerRadius(corner * 0.8f, corner * 0.8f),
-                style = Stroke(width = if (enabled) 2.5f else 1.5f)
+                style = Stroke(width = if (isSixRolled || enabled) 2.5f else 1.5f)
             )
 
             // 5. Draw Golden Flower / Die Pips Motif
-            drawPips(value, accentColor, dSize)
+            drawPips(value, accentColor, dSize, isSix = (value == 6))
         }
     }
 }
@@ -491,7 +549,8 @@ fun DiceFace(
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPips(
     value: Int,
     accentColor: Color,
-    dieSize: Float
+    dieSize: Float,
+    isSix: Boolean = false
 ) {
     val pipRadius = dieSize * 0.082f
     val c = dieSize / 2f
@@ -500,15 +559,17 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPips(
     val top = dieSize * 0.30f
     val bottom = dieSize * 0.70f
 
-    val pipColor = if (value == 6) Color(0xFFDC2626) else Color(0xFF1E293B)
+    val pipColor = if (isSix) Color(0xFFDC2626) else Color(0xFF1E293B)
 
     fun pip(x: Float, y: Float) {
         drawCircle(color = pipColor, radius = pipRadius, center = Offset(x, y))
+        // Subtle shiny reflection in center of pip
+        drawCircle(color = Color.White.copy(alpha = 0.45f), radius = pipRadius * 0.35f, center = Offset(x - pipRadius * 0.2f, y - pipRadius * 0.2f))
     }
 
     when (value) {
         1 -> {
-            // Draw 6-petal white flower motif matching the reference photo
+            // Draw 6-petal flower motif
             val petalRadius = dieSize * 0.055f
             val petalDist = dieSize * 0.11f
             for (i in 0 until 6) {

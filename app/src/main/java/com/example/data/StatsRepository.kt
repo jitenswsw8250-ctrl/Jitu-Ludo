@@ -13,7 +13,9 @@ data class PlayerStatsRecord(
     val color: PlayerColor,
     val isBot: Boolean,
     val wins: Int = 0,
-    val completedGames: Int = 0
+    val completedGames: Int = 0,
+    val captures: Int = 0,
+    val losses: Int = 0
 ) {
     val winPercentageFormatted: String
         get() {
@@ -62,20 +64,27 @@ class StatsRepository(context: Context) {
                 val obj = root.getJSONObject(key)
                 val colorName = obj.optString("color", PlayerColor.RED.name)
                 val color = runCatching { PlayerColor.valueOf(colorName) }.getOrDefault(PlayerColor.RED)
+                val wins = obj.optInt("wins", 0)
+                val completedGames = obj.optInt("completedGames", 0)
+                val captures = obj.optInt("captures", 0)
+                val losses = obj.optInt("losses", (completedGames - wins).coerceAtLeast(0))
                 list.add(
                     PlayerStatsRecord(
                         id = key,
                         name = obj.optString("name", "Player"),
                         color = color,
                         isBot = obj.optBoolean("isBot", false),
-                        wins = obj.optInt("wins", 0),
-                        completedGames = obj.optInt("completedGames", 0)
+                        wins = wins,
+                        completedGames = completedGames,
+                        captures = captures,
+                        losses = losses
                     )
                 )
             }
             list.sortedWith(
                 compareByDescending<PlayerStatsRecord> { it.wins }
                     .thenByDescending { it.completedGames }
+                    .thenByDescending { it.captures }
                     .thenBy { it.name }
             )
         } catch (_: Exception) {
@@ -95,7 +104,9 @@ class StatsRepository(context: Context) {
                 color = player.color,
                 isBot = player.isBot,
                 wins = 0,
-                completedGames = 0
+                completedGames = 0,
+                captures = 0,
+                losses = 0
             )
             val isWinner = (player.color == winner.color && player.name == winner.name)
             currentStats[id] = existing.copy(
@@ -103,7 +114,9 @@ class StatsRepository(context: Context) {
                 color = player.color,
                 isBot = player.isBot,
                 completedGames = existing.completedGames + 1,
-                wins = if (isWinner) existing.wins + 1 else existing.wins
+                wins = if (isWinner) existing.wins + 1 else existing.wins,
+                losses = if (!isWinner) existing.losses + 1 else existing.losses,
+                captures = existing.captures + player.captures
             )
         }
 
@@ -125,6 +138,8 @@ class StatsRepository(context: Context) {
                 put("isBot", record.isBot)
                 put("wins", record.wins)
                 put("completedGames", record.completedGames)
+                put("captures", record.captures)
+                put("losses", record.losses)
             }
             root.put(id, obj)
         }

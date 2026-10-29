@@ -19,6 +19,8 @@ import com.example.ui.LudoViewModel
 import com.example.ui.screens.GameScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.RulesDialog
+import com.example.ui.screens.SettingsDialog
+import com.example.ui.screens.SkinsDialog
 import com.example.ui.screens.StatisticsDialog
 import com.example.ui.screens.WebViewScreen
 import com.example.ui.theme.MyApplicationTheme
@@ -52,6 +54,8 @@ fun LudoAppRoot(
     var currentScreen by remember { mutableStateOf(AppScreen.HOME) }
     var showRulesDialog by remember { mutableStateOf(false) }
     var showStatsDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    var showSkinsDialog by remember { mutableStateOf(false) }
 
     val gameState by viewModel.gameState.collectAsState()
     val playerStats by viewModel.playerStats.collectAsState()
@@ -87,6 +91,8 @@ fun LudoAppRoot(
                     }
                     context.startActivity(Intent.createChooser(shareIntent, "Share Jitu Ludo via"))
                 },
+                onOpenSettings = { showSettingsDialog = true },
+                onOpenSkins = { showSkinsDialog = true },
                 modifier = modifier
             )
         }
@@ -107,6 +113,9 @@ fun LudoAppRoot(
                 },
                 onNavigateHome = { currentScreen = AppScreen.HOME },
                 onToggleSound = { viewModel.toggleSound() },
+                onToggleHaptics = { viewModel.toggleHaptics() },
+                onSetAnimationSpeed = { viewModel.setAnimationSpeed(it) },
+                onSetSkin = { viewModel.setSkin(it) },
                 onOpenStats = { showStatsDialog = true },
                 modifier = modifier
             )
@@ -129,6 +138,36 @@ fun LudoAppRoot(
             statsList = playerStats,
             onResetStats = { viewModel.resetStats() },
             onDismiss = { showStatsDialog = false }
+        )
+    }
+
+    if (showSettingsDialog) {
+        SettingsDialog(
+            soundEnabled = gameState.soundEnabled,
+            hapticsEnabled = gameState.hapticsEnabled,
+            animationSpeed = gameState.animationSpeed,
+            currentSkin = gameState.currentSkin,
+            onToggleSound = { viewModel.toggleSound() },
+            onToggleHaptics = { viewModel.toggleHaptics() },
+            onSetAnimationSpeed = { viewModel.setAnimationSpeed(it) },
+            onOpenSkins = {
+                showSettingsDialog = false
+                showSkinsDialog = true
+            },
+            onOpenRules = {
+                showSettingsDialog = false
+                showRulesDialog = true
+            },
+            onResetStats = { viewModel.resetStats() },
+            onDismiss = { showSettingsDialog = false }
+        )
+    }
+
+    if (showSkinsDialog) {
+        SkinsDialog(
+            currentSkin = gameState.currentSkin,
+            onSkinSelected = { viewModel.setSkin(it) },
+            onDismiss = { showSkinsDialog = false }
         )
     }
 }

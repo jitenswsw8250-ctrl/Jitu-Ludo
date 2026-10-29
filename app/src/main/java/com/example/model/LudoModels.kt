@@ -69,6 +69,7 @@ data class Player(
     val rank: Int? = null, // 1st, 2nd, 3rd, 4th
     val captures: Int = 0,
     val losses: Int = 0,
+    val consecutiveSixes: Int = 0,
     val liveWinChancePercent: Int = 0,
     val estimatedWinChanceText: String = ""
 ) {
@@ -112,6 +113,65 @@ data class CaptureAnimationEvent(
     val capturedEmoji: String = "😭"
 )
 
+enum class GameSkin(
+    val title: String,
+    val description: String,
+    val primaryTone: Color,
+    val accentTone: Color,
+    val rimTone: Color
+) {
+    CLASSIC(
+        title = "Classic",
+        description = "Traditional glossy enamel",
+        primaryTone = Color(0xFFF59E0B),
+        accentTone = Color(0xFFFDE68A),
+        rimTone = Color(0xFF1E3A8A)
+    ),
+    RUBY(
+        title = "Ruby",
+        description = "Imperial crimson gemstone",
+        primaryTone = Color(0xFFE11D48),
+        accentTone = Color(0xFFFDA4AF),
+        rimTone = Color(0xFF881337)
+    ),
+    EMERALD(
+        title = "Emerald",
+        description = "Royal jade & green lustre",
+        primaryTone = Color(0xFF059669),
+        accentTone = Color(0xFF6EE7B7),
+        rimTone = Color(0xFF064E3B)
+    ),
+    SAPPHIRE(
+        title = "Sapphire",
+        description = "Deep celestial cosmic blue",
+        primaryTone = Color(0xFF2563EB),
+        accentTone = Color(0xFF93C5FD),
+        rimTone = Color(0xFF1E3A8A)
+    ),
+    GOLD(
+        title = "Gold",
+        description = "24K burnished luxury gold",
+        primaryTone = Color(0xFFEAB308),
+        accentTone = Color(0xFFFEF08A),
+        rimTone = Color(0xFF78350F)
+    ),
+    SILVER(
+        title = "Silver",
+        description = "Mirror-finish platinum chrome",
+        primaryTone = Color(0xFF94A3B8),
+        accentTone = Color(0xFFF8FAFC),
+        rimTone = Color(0xFF334155)
+    )
+}
+
+enum class AnimationSpeed(
+    val title: String,
+    val stepDelayMs: Long
+) {
+    NORMAL("Normal", 100L),
+    FAST("Fast", 60L)
+}
+
 data class GameState(
     val players: List<Player> = emptyList(),
     val currentTurnIndex: Int = 0,
@@ -125,7 +185,9 @@ data class GameState(
     val soundEnabled: Boolean = true,
     val hapticsEnabled: Boolean = true,
     val autoRollBots: Boolean = true,
-    val captureEvent: CaptureAnimationEvent? = null
+    val captureEvent: CaptureAnimationEvent? = null,
+    val currentSkin: GameSkin = GameSkin.CLASSIC,
+    val animationSpeed: AnimationSpeed = AnimationSpeed.NORMAL
 ) {
     val currentPlayer: Player?
         get() = players.getOrNull(currentTurnIndex)

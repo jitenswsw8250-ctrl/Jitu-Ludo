@@ -42,21 +42,32 @@ object LudoEngine {
 
     /**
      * Rolls the dice (1..6) and returns updated state with turn phase and movable tokens.
+     *
+     * STRICT CONSECUTIVE-SIX RULE:
+     * - If the same player rolls a six twice consecutively (consecutiveSixes >= 2),
+     *   their third consecutive roll MUST NOT be six.
+     * - On the third roll, only dice values 1, 2, 3, 4, or 5 are allowed.
+     * - Consecutive sixes are tracked separately for each player and reset when a non-six
+     *   is rolled or the turn changes.
      */
     fun rollDice(state: GameState, forcedRoll: Int? = null): GameState {
         val player = state.currentPlayer ?: return state
-        val rollValue = forcedRoll ?: Random.nextInt(1, 7)
-        val newConsecutiveSixes = if (rollValue == 6) state.diceState.consecutiveSixes + 1 else 0
+        val currentConsecutive = player.consecutiveSixes.coerceAtLeast(state.diceState.consecutiveSixes)
 
-        // Rule of 3 consecutive 6s: turn is forfeited
-        if (newConsecutiveSixes >= 3) {
-            return state.copy(
-                diceState = DiceState(value = rollValue, isRolling = false, consecutiveSixes = 0),
-                phase = TurnPhase.TURN_TRANSITION,
-                movableTokenIds = emptySet(),
-                statusMessage = "${player.name} rolled three 6s in a row! Turn forfeited."
-            )
+        // Enforce strict consecutive-six rule:
+        // If current player already rolled two 6s, their third roll MUST NOT be 6. Allow ONLY 1..5.
+        val rollValue = if (currentConsecutive >= 2) {
+            if (forcedRoll != null && forcedRoll in 1..5) {
+                forcedRoll
+            } else {
+                // Strictly disallow 6; select randomly from 1, 2, 3, 4, 5
+                Random.nextInt(1, 6)
+            }
+        } else {
+            forcedRoll ?: Random.nextInt(1, 7)
         }
+
+        val newConsecutiveSixes = if (rollValue == 6) currentConsecutive + 1 else 0
 
         val updatedDice = DiceState(
             value = rollValue,
@@ -64,12 +75,18 @@ object LudoEngine {
             consecutiveSixes = newConsecutiveSixes
         )
 
-        val movable = getMovableTokens(player, rollValue)
+        val updatedPlayers = state.players.mapIndexed { idx, p ->
+            if (idx == state.currentTurnIndex) p.copy(consecutiveSixes = newConsecutiveSixes)
+            else p
+        }
+
+        val movable = getMovableTokens(updatedPlayers[state.currentTurnIndex], rollValue)
         val movableIds = movable.map { it.id }.toSet()
 
         return if (movable.isEmpty()) {
             // No legal moves: show roll result then transition turn
             state.copy(
+                players = updatedPlayers,
                 diceState = DiceState(value = rollValue, isRolling = false, consecutiveSixes = 0),
                 phase = TurnPhase.TURN_TRANSITION,
                 movableTokenIds = emptySet(),
@@ -83,6 +100,7 @@ object LudoEngine {
                 "${player.name} rolled $rollValue. Select a token to move!"
             }
             state.copy(
+                players = updatedPlayers,
                 diceState = updatedDice,
                 phase = TurnPhase.SELECTING_TOKEN,
                 movableTokenIds = movableIds,
@@ -258,7 +276,20 @@ object LudoEngine {
             }
         }
 
-        val playersWithWinChances = calculateLiveWinChances(updatedPlayers)
+        val playersWithConsecutiveTracked = updatedPlayers.mapIndexed { idx, p ->
+            if (idx == nextTurnIndex) {
+                // If same player gets bonus turn from rolling a 6, preserve their count
+                if (bonusTurn && roll == 6 && nextTurnIndex == state.currentTurnIndex) {
+                    p.copy(consecutiveSixes = state.diceState.consecutiveSixes)
+                } else {
+                    p.copy(consecutiveSixes = 0)
+                }
+            } else {
+                p.copy(consecutiveSixes = 0)
+            }
+        }
+
+        val playersWithWinChances = calculateLiveWinChances(playersWithConsecutiveTracked)
 
         val newState = state.copy(
             players = playersWithWinChances,

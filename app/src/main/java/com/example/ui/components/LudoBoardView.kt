@@ -672,12 +672,12 @@ private fun DrawScope.drawTrackCells(cellSize: Float) {
         val rectSize = Size(cellSize, cellSize)
         val center = Offset(rectTopLeft.x + cellSize / 2f, rectTopLeft.y + cellSize / 2f)
 
-        // Starting squares get soft pastel accent, safe star squares soft violet, others clean crisp off-white
+        // Starting squares get exact matching colored path fills, safe star squares soft violet, others clean crisp off-white
         val cellColor = when (index) {
-            0 -> Color(0xFFFFE4E6)  // Red start (6, 13)
-            13 -> Color(0xFFDCFCE7) // Green start (1, 6)
-            26 -> Color(0xFFFEF9C3) // Yellow start (8, 1)
-            39 -> Color(0xFFDBEAFE) // Blue start (13, 8)
+            0 -> Color(0xFFDC2626)  // Red start (6, 13) matching red home-lane path
+            13 -> Color(0xFF059669) // Green start (1, 6) matching green home-lane path
+            26 -> Color(0xFFD97706) // Yellow start (8, 1) matching yellow home-lane path
+            39 -> Color(0xFF2563EB) // Blue start (13, 8) matching blue home-lane path
             8, 21, 34, 47 -> Color(0xFFEDE9FE) // Star safe cells
             else -> Color(0xFFF8FAFC)
         }
@@ -685,7 +685,7 @@ private fun DrawScope.drawTrackCells(cellSize: Float) {
         // Cell background fill
         drawRect(color = cellColor, topLeft = rectTopLeft, size = rectSize)
 
-        // Prominent circular movement spaces / stepping stone rings inside regular cells
+        // Prominent circular movement spaces / stepping stone rings inside regular white cells
         if (index !in listOf(0, 13, 26, 39, 8, 21, 34, 47)) {
             val waypointRadius = cellSize * 0.35f
             drawCircle(
@@ -705,6 +705,21 @@ private fun DrawScope.drawTrackCells(cellSize: Float) {
             )
         }
 
+        // Colored entry cells (0, 13, 26, 39): Styled identically to the colored home-lane path squares
+        if (index in listOf(0, 13, 26, 39)) {
+            drawCircle(
+                color = Color.White.copy(alpha = 0.30f),
+                radius = cellSize * 0.28f,
+                center = center
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.65f),
+                radius = cellSize * 0.28f,
+                center = center,
+                style = Stroke(cellSize * 0.035f)
+            )
+        }
+
         // Sharper, darker cell grid border
         drawRect(
             color = trackBorderColor,
@@ -712,14 +727,6 @@ private fun DrawScope.drawTrackCells(cellSize: Float) {
             size = rectSize,
             style = Stroke(width = trackStrokeWidth)
         )
-
-        // Starting direction arrows with 3D drop shadow
-        when (index) {
-            0 -> drawArrow(center, cellSize * 0.38f, ArrowDirection.UP, Color(0xFFDC2626))
-            13 -> drawArrow(center, cellSize * 0.38f, ArrowDirection.RIGHT, Color(0xFF059669))
-            26 -> drawArrow(center, cellSize * 0.38f, ArrowDirection.DOWN, Color(0xFFD97706))
-            39 -> drawArrow(center, cellSize * 0.38f, ArrowDirection.LEFT, Color(0xFF2563EB))
-        }
 
         // Safe Star squares (indices 8, 21, 34, 47) with prominent circular golden medallion and colored star
         if (index == 8 || index == 21 || index == 34 || index == 47) {
@@ -757,36 +764,6 @@ private fun DrawScope.drawTrackCells(cellSize: Float) {
     drawHomeLane(LudoBoardMap.GREEN_HOME_LANE, Color(0xFF059669), cellSize, trackBorderColor) // Green (Left Arm)
     drawHomeLane(LudoBoardMap.YELLOW_HOME_LANE, Color(0xFFD97706), cellSize, trackBorderColor) // Yellow (Top Arm)
     drawHomeLane(LudoBoardMap.BLUE_HOME_LANE, Color(0xFF2563EB), cellSize, trackBorderColor) // Blue (Right Arm)
-}
-
-enum class ArrowDirection { UP, DOWN, LEFT, RIGHT }
-
-private fun DrawScope.drawArrow(center: Offset, size: Float, direction: ArrowDirection, color: Color) {
-    val path = Path()
-    when (direction) {
-        ArrowDirection.UP -> {
-            path.moveTo(center.x, center.y - size)
-            path.lineTo(center.x + size * 0.72f, center.y + size * 0.6f)
-            path.lineTo(center.x - size * 0.72f, center.y + size * 0.6f)
-        }
-        ArrowDirection.RIGHT -> {
-            path.moveTo(center.x + size, center.y)
-            path.lineTo(center.x - size * 0.6f, center.y - size * 0.72f)
-            path.lineTo(center.x - size * 0.6f, center.y + size * 0.72f)
-        }
-        ArrowDirection.DOWN -> {
-            path.moveTo(center.x, center.y + size)
-            path.lineTo(center.x + size * 0.72f, center.y - size * 0.6f)
-            path.lineTo(center.x - size * 0.72f, center.y - size * 0.6f)
-        }
-        ArrowDirection.LEFT -> {
-            path.moveTo(center.x - size, center.y)
-            path.lineTo(center.x + size * 0.6f, center.y - size * 0.72f)
-            path.lineTo(center.x + size * 0.6f, center.y + size * 0.72f)
-        }
-    }
-    path.close()
-    drawPath(path, color)
 }
 
 private fun DrawScope.drawHomeLane(
@@ -913,6 +890,15 @@ private fun DrawScope.drawTokens(gameState: GameState, cellSize: Float, pulseSca
             }
 
             // --- 3D Pawn Rendering ---
+            val skin = gameState.currentSkin
+            val (bodyLight, bodyPrimary, bodyDark) = when (skin) {
+                com.example.model.GameSkin.CLASSIC -> Triple(player.color.lightColor, player.color.primaryColor, player.color.darkColor)
+                com.example.model.GameSkin.RUBY -> Triple(Color(0xFFFDA4AF), Color(0xFFE11D48), Color(0xFF881337))
+                com.example.model.GameSkin.EMERALD -> Triple(Color(0xFFA7F3D0), Color(0xFF059669), Color(0xFF064E3B))
+                com.example.model.GameSkin.SAPPHIRE -> Triple(Color(0xFFBAE6FD), Color(0xFF2563EB), Color(0xFF1E3A8A))
+                com.example.model.GameSkin.GOLD -> Triple(Color(0xFFFEF08A), Color(0xFFEAB308), Color(0xFF78350F))
+                com.example.model.GameSkin.SILVER -> Triple(Color(0xFFF8FAFC), Color(0xFF94A3B8), Color(0xFF334155))
+            }
 
             // 1. Realistic Directional Drop Shadow
             drawOval(
@@ -933,9 +919,9 @@ private fun DrawScope.drawTokens(gameState: GameState, cellSize: Float, pulseSca
             drawOval(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        player.color.lightColor,
-                        player.color.primaryColor,
-                        player.color.darkColor
+                        bodyLight,
+                        bodyPrimary,
+                        bodyDark
                     ),
                     center = Offset(center.x - tokenRadius * 0.35f, bellTop + bellHeight * 0.25f),
                     radius = tokenRadius * 1.2f
@@ -943,21 +929,21 @@ private fun DrawScope.drawTokens(gameState: GameState, cellSize: Float, pulseSca
                 topLeft = Offset(center.x - tokenRadius * 0.82f, bellTop),
                 size = Size(tokenRadius * 1.64f, bellHeight)
             )
-            // Base rim highlight stroke
+            // Base player-color rim identification stroke
             drawOval(
-                color = Color.White.copy(alpha = 0.35f),
+                color = player.color.primaryColor,
                 topLeft = Offset(center.x - tokenRadius * 0.82f, bellTop),
                 size = Size(tokenRadius * 1.64f, bellHeight),
-                style = Stroke(width = cellSize * 0.035f)
+                style = Stroke(width = cellSize * 0.04f)
             )
 
-            // 3. Collar neck ring
+            // 3. Collar neck ring (Player identification team band)
             val collarCenter = Offset(center.x, center.y - tokenRadius * 0.18f)
             drawOval(
                 brush = Brush.linearGradient(
                     colors = listOf(
                         Color.White.copy(alpha = 0.95f),
-                        player.color.lightColor,
+                        player.color.primaryColor,
                         player.color.darkColor
                     ),
                     start = Offset(collarCenter.x - tokenRadius * 0.45f, collarCenter.y),
@@ -983,9 +969,9 @@ private fun DrawScope.drawTokens(gameState: GameState, cellSize: Float, pulseSca
                 brush = Brush.radialGradient(
                     colors = listOf(
                         Color.White,
-                        player.color.lightColor,
-                        player.color.primaryColor,
-                        player.color.darkColor
+                        bodyLight,
+                        bodyPrimary,
+                        bodyDark
                     ),
                     center = Offset(headCenter.x - headRadius * 0.35f, headCenter.y - headRadius * 0.35f),
                     radius = headRadius * 1.3f

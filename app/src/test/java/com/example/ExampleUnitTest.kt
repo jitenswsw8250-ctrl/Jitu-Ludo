@@ -188,7 +188,7 @@ class ExampleUnitTest {
 
     // Rule 6: Rolling a 6 grants an extra turn. Apply three consecutive sixes rule correctly.
     @Test
-    fun rule6_rollingSixGrantsExtraTurnAndThreeSixesForfeits() {
+    fun rule6_rollingSixGrantsExtraTurnAndThirdRollCannotBeSix() {
         val player1 = Player(color = PlayerColor.RED, name = "Red")
         val player2 = Player(color = PlayerColor.YELLOW, name = "Yellow")
         val state = GameState(
@@ -198,21 +198,29 @@ class ExampleUnitTest {
             phase = TurnPhase.WAITING_FOR_ROLL
         )
 
-        // First 6
+        // First 6: awards bonus turn
         val state1 = LudoEngine.rollDice(state, forcedRoll = 6)
         assertEquals(1, state1.diceState.consecutiveSixes)
         assertEquals(0, state1.currentTurnIndex)
 
-        // Second 6
+        // Second 6: awards bonus turn
         val state2 = LudoEngine.rollDice(state1.copy(phase = TurnPhase.WAITING_FOR_ROLL), forcedRoll = 6)
         assertEquals(2, state2.diceState.consecutiveSixes)
         assertEquals(0, state2.currentTurnIndex)
 
-        // Third 6 -> turn forfeited!
+        // Third roll: STRICT RULE - roll MUST NOT be 6!
+        // Even if forcedRoll = 6 is attempted, engine strictly rejects 6 and guarantees 1..5
         val state3 = LudoEngine.rollDice(state2.copy(phase = TurnPhase.WAITING_FOR_ROLL), forcedRoll = 6)
-        assertEquals(TurnPhase.TURN_TRANSITION, state3.phase)
+        assertTrue("Third roll value MUST be in 1..5, but was ${state3.diceState.value}", state3.diceState.value in 1..5)
         assertEquals(0, state3.diceState.consecutiveSixes)
-        assertTrue(state3.statusMessage.contains("forfeited"))
+
+        // Verify across 100 random rolls that third roll is NEVER 6
+        for (i in 1..100) {
+            val randomRollState = LudoEngine.rollDice(state2.copy(phase = TurnPhase.WAITING_FOR_ROLL))
+            assertTrue("Third roll must be between 1 and 5", randomRollState.diceState.value in 1..5)
+            assertTrue("Third roll must never be 6", randomRollState.diceState.value != 6)
+            assertEquals(0, randomRollState.diceState.consecutiveSixes)
+        }
     }
 
     // Rule 7: The next player's turn must be handled correctly when no legal move is available.
@@ -1144,15 +1152,14 @@ class ExampleUnitTest {
         assertTrue("2nd six awards bonus turn", outcome2.hasBonusTurn)
         assertEquals(TokenPosition.OnBoard(step = 6), outcome2.updatedState.players[1].tokens[0].position)
 
-        // 3rd six: Rule of 3 consecutive sixes forfeits turn immediately
+        // 3rd roll: Rule strictly forbids 3rd consecutive six; roll must be in 1..5
         val roll3 = LudoEngine.rollDice(outcome2.updatedState, forcedRoll = 6)
-        assertEquals(TurnPhase.TURN_TRANSITION, roll3.phase)
+        assertTrue("3rd roll value must be in 1..5, but was ${roll3.diceState.value}", roll3.diceState.value in 1..5)
         assertEquals(0, roll3.diceState.consecutiveSixes) // Reset consecutive count
-        assertTrue("Movable tokens must be empty on 3rd six forfeiture", roll3.movableTokenIds.isEmpty())
-        assertTrue("Forfeit message must mention three 6s", roll3.statusMessage.contains("three 6s in a row"))
-
-        val nextIndex = LudoEngine.getNextActivePlayerIndex(roll3.players, roll3.currentTurnIndex)
-        assertEquals("Turn forfeited and handed to opponent index 0", 0, nextIndex)
+        assertTrue("Bot has legal move on roll 1..5", roll3.movableTokenIds.isNotEmpty())
+        val outcome3 = LudoEngine.executeMove(roll3, 0)
+        assertFalse("Non-six normal move does not award bonus turn", outcome3.hasBonusTurn)
+        assertEquals("Turn passes to opponent after normal move", 0, outcome3.updatedState.currentTurnIndex)
     }
 
     // 7. Bot home entry and exact finishing
@@ -1193,6 +1200,221 @@ class ExampleUnitTest {
         assertEquals(TokenPosition.Finished, outcome.updatedState.players[0].tokens[1].position)
         assertTrue("Finishing token grants bonus turn with 'Home' in reason", outcome.bonusReason?.contains("Home") == true)
         assertTrue("Finishing token grants bonus turn", outcome.hasBonusTurn)
+    }
+
+    // =========================================================================
+    // STRICT CONSECUTIVE SIXES RULE VERIFICATION TESTS
+    // =========================================================================
+
+    @Test
+    fun test_consecutiveSixRule_humanPlayer_thirdRollNeverSix() {
+        for (mode in listOf(GameMode.LOCAL_MULTIPLAYER, GameMode.VS_COMPUTER)) {
+            for (color in PlayerColor.entries) {
+                val human = Player(color = color, name = "Human ${color.name}", isBot = false)
+                val opponent = Player(color = PlayerColor.BLUE, name = "Opponent", isBot = true)
+                val baseState = GameState(
+                    players = listOf(human, opponent),
+                    currentTurnIndex = 0,
+                    gameMode = mode,
+                    phase = TurnPhase.WAITING_FOR_ROLL
+                )
+
+                // 1st Roll: 6
+                val s1 = LudoEngine.rollDice(baseState, forcedRoll = 6)
+                assertEquals(1, s1.diceState.consecutiveSixes)
+                assertEquals(1, s1.players[0].consecutiveSixes)
+
+                // Move token out of base
+                val m1 = LudoEngine.executeMove(s1, 0)
+                assertTrue(m1.hasBonusTurn)
+                assertEquals(0, m1.updatedState.currentTurnIndex)
+
+                // 2nd Roll: 6
+                val s2 = LudoEngine.rollDice(m1.updatedState, forcedRoll = 6)
+                assertEquals(2, s2.diceState.consecutiveSixes)
+                assertEquals(2, s2.players[0].consecutiveSixes)
+
+                // Move token forward 6 steps
+                val m2 = LudoEngine.executeMove(s2, 0)
+                assertTrue(m2.hasBonusTurn)
+                assertEquals(0, m2.updatedState.currentTurnIndex)
+
+                // 3rd Roll: Run 100 random trials. MUST ALWAYS be in 1..5, NEVER 6.
+                for (trial in 1..100) {
+                    val s3 = LudoEngine.rollDice(m2.updatedState)
+                    assertTrue("Human 3rd consecutive roll must be in 1..5, but got ${s3.diceState.value}", s3.diceState.value in 1..5)
+                    assertFalse("Human 3rd consecutive roll must NEVER be 6", s3.diceState.value == 6)
+                    assertEquals("consecutiveSixes must reset to 0 after third roll", 0, s3.diceState.consecutiveSixes)
+                    assertEquals("Player consecutiveSixes must reset to 0 after third roll", 0, s3.players[0].consecutiveSixes)
+                }
+
+                // Also verify that even if forcedRoll = 6 is supplied, it is rejected and forced to 1..5
+                val s3Forced = LudoEngine.rollDice(m2.updatedState, forcedRoll = 6)
+                assertTrue("Forced 6 on 3rd roll must be overridden to 1..5, got ${s3Forced.diceState.value}", s3Forced.diceState.value in 1..5)
+                assertFalse("Forced 6 on 3rd roll must NEVER be 6", s3Forced.diceState.value == 6)
+                assertEquals(0, s3Forced.diceState.consecutiveSixes)
+            }
+        }
+    }
+
+    @Test
+    fun test_consecutiveSixRule_aiBot_thirdRollNeverSix() {
+        for (mode in listOf(GameMode.VS_COMPUTER, GameMode.LOCAL_MULTIPLAYER)) {
+            val bot = Player(color = PlayerColor.GREEN, name = "Bot Green", isBot = true)
+            val human = Player(color = PlayerColor.RED, name = "Human", isBot = false)
+            val baseState = GameState(
+                players = listOf(bot, human),
+                currentTurnIndex = 0,
+                gameMode = mode,
+                phase = TurnPhase.WAITING_FOR_ROLL
+            )
+
+            // 1st Roll: 6
+            val s1 = LudoEngine.rollDice(baseState, forcedRoll = 6)
+            assertEquals(1, s1.diceState.consecutiveSixes)
+            val m1 = LudoEngine.executeMove(s1, 0)
+            assertTrue(m1.hasBonusTurn)
+
+            // 2nd Roll: 6
+            val s2 = LudoEngine.rollDice(m1.updatedState, forcedRoll = 6)
+            assertEquals(2, s2.diceState.consecutiveSixes)
+            val m2 = LudoEngine.executeMove(s2, 0)
+            assertTrue(m2.hasBonusTurn)
+
+            // 3rd Roll: 100 trials, must NEVER be 6
+            for (trial in 1..100) {
+                val s3 = LudoEngine.rollDice(m2.updatedState)
+                assertTrue("Bot 3rd roll must be in 1..5, but was ${s3.diceState.value}", s3.diceState.value in 1..5)
+                assertFalse("Bot 3rd roll must never be 6", s3.diceState.value == 6)
+                assertEquals(0, s3.diceState.consecutiveSixes)
+            }
+        }
+    }
+
+    @Test
+    fun test_consecutiveSixes_trackedSeparatelyPerPlayer() {
+        val p1 = Player(color = PlayerColor.RED, name = "P1")
+        val p2 = Player(color = PlayerColor.BLUE, name = "P2")
+        val state = GameState(
+            players = listOf(p1, p2),
+            currentTurnIndex = 0,
+            phase = TurnPhase.WAITING_FOR_ROLL
+        )
+
+        // P1 rolls 6 twice
+        val s1 = LudoEngine.rollDice(state, forcedRoll = 6)
+        val m1 = LudoEngine.executeMove(s1, 0)
+        val s2 = LudoEngine.rollDice(m1.updatedState, forcedRoll = 6)
+        val m2 = LudoEngine.executeMove(s2, 0)
+        assertEquals(2, m2.updatedState.players[0].consecutiveSixes)
+
+        // P1's 3rd roll is 3 (normal roll in 1..5)
+        val s3 = LudoEngine.rollDice(m2.updatedState, forcedRoll = 3)
+        assertEquals(3, s3.diceState.value)
+        assertEquals(0, s3.diceState.consecutiveSixes)
+        assertEquals(0, s3.players[0].consecutiveSixes)
+
+        // P1 moves and turn ends, switching to P2
+        val m3 = LudoEngine.executeMove(s3, 0)
+        assertFalse("Move with 3 does not award bonus turn", m3.hasBonusTurn)
+        assertEquals(1, m3.updatedState.currentTurnIndex) // P2's turn
+        assertEquals(0, m3.updatedState.players[1].consecutiveSixes)
+
+        // P2 rolls a 6 on their turn
+        val s4 = LudoEngine.rollDice(m3.updatedState, forcedRoll = 6)
+        assertEquals(1, s4.diceState.consecutiveSixes) // P2's count is 1, NOT 3!
+        assertEquals(1, s4.players[1].consecutiveSixes)
+        assertEquals(0, s4.players[0].consecutiveSixes)
+    }
+
+    @Test
+    fun test_consecutiveSixes_resetOnNonSix() {
+        val p1 = Player(color = PlayerColor.RED, name = "P1")
+        val p2 = Player(color = PlayerColor.BLUE, name = "P2")
+        val state = GameState(players = listOf(p1, p2), currentTurnIndex = 0)
+
+        // Roll 6
+        val s1 = LudoEngine.rollDice(state, forcedRoll = 6)
+        assertEquals(1, s1.diceState.consecutiveSixes)
+
+        val m1 = LudoEngine.executeMove(s1, 0)
+        assertEquals(1, m1.updatedState.players[0].consecutiveSixes)
+
+        // Next roll is 2
+        val s2 = LudoEngine.rollDice(m1.updatedState, forcedRoll = 2)
+        assertEquals(0, s2.diceState.consecutiveSixes)
+        assertEquals(0, s2.players[0].consecutiveSixes)
+    }
+
+    @Test
+    fun test_playerStatsRecord_captures_and_winPercentage() {
+        val record = PlayerStatsRecord(
+            id = "human:player 1",
+            name = "Player 1",
+            color = PlayerColor.RED,
+            isBot = false,
+            wins = 3,
+            completedGames = 4,
+            captures = 7,
+            losses = 1
+        )
+
+        assertEquals("Player 1", record.name)
+        assertEquals(3, record.wins)
+        assertEquals(4, record.completedGames)
+        assertEquals(7, record.captures)
+        assertEquals(1, record.losses)
+        assertEquals("75%", record.winPercentageFormatted)
+
+        val zeroGames = record.copy(completedGames = 0, wins = 0)
+        assertEquals("—", zeroGames.winPercentageFormatted)
+
+        val oneThird = record.copy(completedGames = 3, wins = 1)
+        assertEquals("33.3%", oneThird.winPercentageFormatted)
+    }
+
+    @Test
+    fun test_gameSkins_definedProperly() {
+        val skins = com.example.model.GameSkin.values()
+        assertEquals(6, skins.size)
+        assertTrue(skins.contains(com.example.model.GameSkin.CLASSIC))
+        assertTrue(skins.contains(com.example.model.GameSkin.RUBY))
+        assertTrue(skins.contains(com.example.model.GameSkin.EMERALD))
+        assertTrue(skins.contains(com.example.model.GameSkin.SAPPHIRE))
+        assertTrue(skins.contains(com.example.model.GameSkin.GOLD))
+        assertTrue(skins.contains(com.example.model.GameSkin.SILVER))
+
+        for (skin in skins) {
+            assertTrue(skin.title.isNotEmpty())
+            assertTrue(skin.description.isNotEmpty())
+        }
+    }
+
+    @Test
+    fun test_animationSpeed_values() {
+        assertEquals(100L, com.example.model.AnimationSpeed.NORMAL.stepDelayMs)
+        assertEquals(60L, com.example.model.AnimationSpeed.FAST.stepDelayMs)
+        assertTrue(com.example.model.AnimationSpeed.FAST.stepDelayMs < com.example.model.AnimationSpeed.NORMAL.stepDelayMs)
+    }
+
+    @Test
+    fun test_victoryCondition_triggersGameOver() {
+        val finishedTokens = List(4) { Token(id = it, color = PlayerColor.RED, position = TokenPosition.Finished) }
+        val winnerPlayer = Player(color = PlayerColor.RED, name = "Winner Red", tokens = finishedTokens)
+        val opponentTokens = List(4) { Token(id = it, color = PlayerColor.YELLOW, position = TokenPosition.InBase) }
+        val opponent = Player(color = PlayerColor.YELLOW, name = "Opponent", tokens = opponentTokens)
+
+        val state = GameState(
+            players = listOf(winnerPlayer, opponent),
+            currentTurnIndex = 0,
+            winnerPodium = listOf(winnerPlayer),
+            isGameOver = true
+        )
+
+        assertTrue(winnerPlayer.isFinished)
+        assertEquals(4, winnerPlayer.finishedTokensCount)
+        assertTrue(state.isGameOver)
+        assertEquals("Winner Red", state.winnerPodium.first().name)
     }
 }
 

@@ -22,12 +22,24 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
+import com.example.data.SettingsRepository
+import com.example.model.AnimationSpeed
+import com.example.model.GameSkin
+
 class LudoViewModel(application: Application) : AndroidViewModel(application) {
 
     private val soundManager = SoundManager(application)
     private val statsRepository = StatsRepository(application)
+    private val settingsRepository = SettingsRepository(application)
 
-    private val _gameState = MutableStateFlow(GameState())
+    private val _gameState = MutableStateFlow(
+        GameState(
+            soundEnabled = SettingsRepository(application).isSoundEnabled(),
+            hapticsEnabled = SettingsRepository(application).isHapticsEnabled(),
+            animationSpeed = SettingsRepository(application).getAnimationSpeed(),
+            currentSkin = SettingsRepository(application).getSelectedSkin()
+        )
+    )
     val gameState: StateFlow<GameState> = _gameState.asStateFlow()
 
     private val _playerStats = MutableStateFlow<List<PlayerStatsRecord>>(emptyList())
@@ -132,7 +144,9 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
                 isGameOver = false,
                 soundEnabled = it.soundEnabled,
                 hapticsEnabled = it.hapticsEnabled,
-                autoRollBots = it.autoRollBots
+                autoRollBots = it.autoRollBots,
+                currentSkin = it.currentSkin,
+                animationSpeed = it.animationSpeed
             )
         }
 
@@ -156,15 +170,18 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
                 soundManager.playDiceRoll(state.soundEnabled, state.hapticsEnabled)
 
                 // Rapid tumble animation (snappy, smooth and non-blocking)
+                val curPlayerConsecutive = _gameState.value.currentPlayer?.consecutiveSixes
+                    ?: _gameState.value.diceState.consecutiveSixes
+                val maxTumble = if (curPlayerConsecutive >= 2) 6 else 7
                 repeat(4) {
                     _gameState.update {
-                        it.copy(diceState = it.diceState.copy(value = Random.nextInt(1, 7)))
+                        it.copy(diceState = it.diceState.copy(value = Random.nextInt(1, maxTumble)))
                     }
                     delay(35)
                 }
 
-                // Final roll resolution
-                val finalRoll = Random.nextInt(1, 7)
+                // Final roll resolution: strictly 1..5 if on third consecutive roll
+                val finalRoll = if (curPlayerConsecutive >= 2) Random.nextInt(1, 6) else Random.nextInt(1, 7)
                 val updatedState = LudoEngine.rollDice(_gameState.value, forcedRoll = finalRoll)
                 _gameState.value = updatedState
 
@@ -267,12 +284,14 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
                         movableTokenIds = emptySet()
                     )
                 }
+                val stepDelay = startState.animationSpeed.stepDelayMs
                 soundManager.playMove(startState.soundEnabled, startState.hapticsEnabled)
-                delay(100)
+                delay(stepDelay)
             }
             is com.example.model.TokenPosition.OnBoard -> {
                 val startStep = pos.step
                 val targetStep = startStep + roll
+                val stepDelay = startState.animationSpeed.stepDelayMs
 
                 for (s in (startStep + 1)..targetStep) {
                     val intermediatePos = if (s >= com.example.logic.LudoBoardMap.MAX_STEPS) {
@@ -296,7 +315,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                     soundManager.playMove(startState.soundEnabled, startState.hapticsEnabled)
-                    delay(100) // 100ms per square (target: 80-120ms)
+                    delay(stepDelay) // Respects Normal (100ms) or Fast (60ms) animation speed
                 }
             }
             is com.example.model.TokenPosition.Finished -> {}
@@ -467,6 +486,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleSound() {
         _gameState.update {
             val next = !it.soundEnabled
+            settingsRepository.setSoundEnabled(next)
             if (next) {
                 soundManager.playButtonClick(true)
             }
@@ -479,7 +499,21 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleHaptics() {
-        _gameState.update { it.copy(hapticsEnabled = !it.hapticsEnabled) }
+        _gameState.update {
+            val next = !it.hapticsEnabled
+            settingsRepository.setHapticsEnabled(next)
+            it.copy(hapticsEnabled = next)
+        }
+    }
+
+    fun setSkin(skin: GameSkin) {
+        settingsRepository.setSelectedSkin(skin)
+        _gameState.update { it.copy(currentSkin = skin) }
+    }
+
+    fun setAnimationSpeed(speed: AnimationSpeed) {
+        settingsRepository.setAnimationSpeed(speed)
+        _gameState.update { it.copy(animationSpeed = speed) }
     }
 
     fun toggleAutoRollBots() {

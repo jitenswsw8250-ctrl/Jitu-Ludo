@@ -92,6 +92,8 @@ fun HomeScreen(
     onOpenStats: () -> Unit,
     onOpenWebView: () -> Unit,
     onShareGame: () -> Unit,
+    onOpenSettings: () -> Unit = {},
+    onOpenSkins: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedMode by remember { mutableStateOf(GameMode.LOCAL_MULTIPLAYER) }
@@ -179,12 +181,13 @@ fun HomeScreen(
                     onToggleHaptics = onToggleHaptics
                 )
 
-                // 7. COMPACT SECONDARY UTILITY BAR (Share, Rules, Stats, Web)
+                // 7. COMPACT SECONDARY UTILITY BAR (Skins, Settings, Stats, Rules, Share)
                 QuickUtilityBar(
                     onShareGame = onShareGame,
                     onOpenRules = onOpenRules,
                     onOpenStats = onOpenStats,
-                    onOpenWebView = onOpenWebView
+                    onOpenSettings = onOpenSettings,
+                    onOpenSkins = onOpenSkins
                 )
 
                 // Bottom spacer inside scroll container to ensure comfortable clearance
@@ -1091,31 +1094,32 @@ private fun QuickUtilityBar(
     onShareGame: () -> Unit,
     onOpenRules: () -> Unit,
     onOpenStats: () -> Unit,
-    onOpenWebView: () -> Unit
+    onOpenSettings: () -> Unit,
+    onOpenSkins: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Share Game Button
+        // Skins Button
         UtilityButton(
-            text = "Share",
-            icon = Icons.Default.Share,
-            onClick = onShareGame,
+            text = "Skins",
+            icon = Icons.Default.Palette,
+            onClick = onOpenSkins,
             modifier = Modifier.weight(1f),
-            testTag = "home_share_button",
-            accentColor = Color(0xFF38BDF8)
+            testTag = "home_skins_button",
+            accentColor = Color(0xFFFDE047)
         )
 
-        // Rules Button
+        // Settings Button
         UtilityButton(
-            text = "Rules",
-            icon = Icons.AutoMirrored.Filled.HelpOutline,
-            onClick = onOpenRules,
+            text = "Settings",
+            icon = Icons.Default.Settings,
+            onClick = onOpenSettings,
             modifier = Modifier.weight(1f),
-            testTag = "home_rules_button",
-            accentColor = Color(0xFFFDE047)
+            testTag = "home_settings_button",
+            accentColor = Color(0xFF38BDF8)
         )
 
         // Statistics Button
@@ -1128,13 +1132,23 @@ private fun QuickUtilityBar(
             accentColor = Color(0xFF34D399)
         )
 
-        // Web Version Button
+        // Rules Button
         UtilityButton(
-            text = "Web",
-            icon = Icons.Default.Language,
-            onClick = onOpenWebView,
+            text = "Rules",
+            icon = Icons.AutoMirrored.Filled.HelpOutline,
+            onClick = onOpenRules,
             modifier = Modifier.weight(1f),
-            testTag = "home_web_version_button",
+            testTag = "home_rules_button",
+            accentColor = Color(0xFFFBBF24)
+        )
+
+        // Share Game Button
+        UtilityButton(
+            text = "Share",
+            icon = Icons.Default.Share,
+            onClick = onShareGame,
+            modifier = Modifier.weight(1f),
+            testTag = "home_share_button",
             accentColor = Color(0xFFA78BFA)
         )
     }

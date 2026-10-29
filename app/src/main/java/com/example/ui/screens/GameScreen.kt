@@ -97,11 +97,15 @@ fun GameScreen(
     onRestartGame: () -> Unit,
     onNavigateHome: () -> Unit,
     onToggleSound: () -> Unit,
+    onToggleHaptics: () -> Unit = {},
+    onSetAnimationSpeed: (com.example.model.AnimationSpeed) -> Unit = {},
+    onSetSkin: (com.example.model.GameSkin) -> Unit = {},
     onOpenStats: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showRulesDialog by remember { mutableStateOf(false) }
     var showSettingsMenu by remember { mutableStateOf(false) }
+    var showSkinsDialog by remember { mutableStateOf(false) }
     var boardBounds by remember { mutableStateOf<Rect?>(null) }
     var rootCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
@@ -165,7 +169,8 @@ fun GameScreen(
                         diceState = gameState.diceState,
                         isGameOver = gameState.isGameOver,
                         onRollDice = onRollDice,
-                        alignRight = false
+                        alignRight = false,
+                        skin = gameState.currentSkin
                     )
                 } else {
                     Spacer(modifier = Modifier.width(48.dp))
@@ -179,7 +184,8 @@ fun GameScreen(
                         diceState = gameState.diceState,
                         isGameOver = gameState.isGameOver,
                         onRollDice = onRollDice,
-                        alignRight = true
+                        alignRight = true,
+                        skin = gameState.currentSkin
                     )
                 } else {
                     Spacer(modifier = Modifier.width(48.dp))
@@ -233,7 +239,8 @@ fun GameScreen(
                         diceState = gameState.diceState,
                         isGameOver = gameState.isGameOver,
                         onRollDice = onRollDice,
-                        alignRight = false
+                        alignRight = false,
+                        skin = gameState.currentSkin
                     )
                 } else {
                     Spacer(modifier = Modifier.width(48.dp))
@@ -264,7 +271,8 @@ fun GameScreen(
                         diceState = gameState.diceState,
                         isGameOver = gameState.isGameOver,
                         onRollDice = onRollDice,
-                        alignRight = true
+                        alignRight = true,
+                        skin = gameState.currentSkin
                     )
                 } else {
                     Spacer(modifier = Modifier.width(48.dp))
@@ -387,99 +395,37 @@ fun GameScreen(
 
     // Settings Modal
     if (showSettingsMenu) {
-        androidx.compose.ui.window.Dialog(onDismissRequest = { showSettingsMenu = false }) {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF26130C)),
-                border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFF59E0B)),
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Game Settings",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 18.sp,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+        SettingsDialog(
+            soundEnabled = gameState.soundEnabled,
+            hapticsEnabled = gameState.hapticsEnabled,
+            animationSpeed = gameState.animationSpeed,
+            currentSkin = gameState.currentSkin,
+            onToggleSound = onToggleSound,
+            onToggleHaptics = onToggleHaptics,
+            onSetAnimationSpeed = onSetAnimationSpeed,
+            onOpenSkins = {
+                showSettingsMenu = false
+                showSkinsDialog = true
+            },
+            onOpenRules = {
+                showSettingsMenu = false
+                showRulesDialog = true
+            },
+            onRestartMatch = {
+                showSettingsMenu = false
+                onRestartGame()
+            },
+            onDismiss = { showSettingsMenu = false }
+        )
+    }
 
-                    // Sound Toggle Button
-                    Button(
-                        onClick = {
-                            onToggleSound()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("game_sound_button"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (gameState.soundEnabled) Color(0xFF16A34A) else Color(0xFF475569)
-                        )
-                    ) {
-                        Icon(
-                            imageVector = if (gameState.soundEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
-                            contentDescription = "Sound Toggle",
-                            tint = Color.White
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (gameState.soundEnabled) "Sound: ON" else "Sound: OFF", color = Color.White)
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Rules Button
-                    Button(
-                        onClick = {
-                            showSettingsMenu = false
-                            showRulesDialog = true
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("game_rules_button"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = "Game Rules", tint = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("How to Play", color = Color.White)
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Restart Button
-                    Button(
-                        onClick = {
-                            showSettingsMenu = false
-                            onRestartGame()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("game_restart_button"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Restart Match", tint = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Restart Match", color = Color.White)
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "Close",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clickable { showSettingsMenu = false }
-                            .padding(8.dp)
-                    )
-                }
-            }
-        }
+    // Skins Customization Modal
+    if (showSkinsDialog) {
+        SkinsDialog(
+            currentSkin = gameState.currentSkin,
+            onSkinSelected = onSetSkin,
+            onDismiss = { showSkinsDialog = false }
+        )
     }
 
     // Victory Celebration Modal
