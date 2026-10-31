@@ -300,7 +300,8 @@ object LudoEngine {
             statusMessage = statusMsg,
             winnerPodium = podium,
             isGameOver = isGameOver,
-            captureEvent = captureEvent
+            captureEvent = captureEvent,
+            extraTurnReason = if (bonusTurn) bonusReason else null
         )
 
         return MoveOutcome(
@@ -327,14 +328,49 @@ object LudoEngine {
     }
 
     /**
-     * Smart Bot AI decision logic for choosing the best token to move.
+     * Smart Bot AI decision logic with Easy, Medium, and Hard difficulty modes.
      */
-    fun pickBestBotToken(state: GameState, botPlayer: Player, diceRoll: Int): Token? {
+    fun pickBestBotToken(
+        state: GameState,
+        botPlayer: Player,
+        diceRoll: Int,
+        difficulty: com.example.model.AiDifficulty = state.aiDifficulty
+    ): Token? {
         val movable = getMovableTokens(botPlayer, diceRoll)
         if (movable.isEmpty()) return null
         if (movable.size == 1) return movable.first()
 
-        // Score each movable token
+        return when (difficulty) {
+            com.example.model.AiDifficulty.EASY -> {
+                // Easy AI: casual, simple decision-making with occasional random moves
+                if (kotlin.random.Random.nextFloat() < 0.40f) {
+                    movable.random()
+                } else {
+                    movable.maxByOrNull { t ->
+                        when (val pos = t.position) {
+                            is TokenPosition.InBase -> 60.0
+                            is TokenPosition.OnBoard -> pos.step.toDouble() + if (pos.step + diceRoll == LudoBoardMap.MAX_STEPS) 300.0 else 0.0
+                            is TokenPosition.Finished -> 0.0
+                        }
+                    } ?: movable.first()
+                }
+            }
+            com.example.model.AiDifficulty.MEDIUM -> {
+                scoreMovableTokens(state, botPlayer, movable, diceRoll, isHard = false)
+            }
+            com.example.model.AiDifficulty.HARD -> {
+                scoreMovableTokens(state, botPlayer, movable, diceRoll, isHard = true)
+            }
+        }
+    }
+
+    private fun scoreMovableTokens(
+        state: GameState,
+        botPlayer: Player,
+        movable: List<Token>,
+        diceRoll: Int,
+        isHard: Boolean
+    ): Token {
         var bestToken = movable.first()
         var maxScore = Double.NEGATIVE_INFINITY
 
@@ -343,23 +379,28 @@ object LudoEngine {
 
             when (val pos = token.position) {
                 is TokenPosition.InBase -> {
-                    // Bringing a token out on a 6 is great
-                    score += 400.0
-                    // Extra bonus if all other tokens are already far away
                     val activeTokens = botPlayer.tokens.count { it.position is TokenPosition.OnBoard }
-                    if (activeTokens == 0) score += 300.0
+                    score += if (isHard) {
+                        when (activeTokens) {
+                            0 -> 1000.0
+                            1 -> 650.0
+                            else -> 400.0
+                        }
+                    } else {
+                        if (activeTokens == 0) 700.0 else 400.0
+                    }
                 }
                 is TokenPosition.OnBoard -> {
                     val nextStep = pos.step + diceRoll
 
                     // 1. Can finish home?
                     if (nextStep == LudoBoardMap.MAX_STEPS) {
-                        score += 900.0
+                        score += if (isHard) 3000.0 else 1000.0
                     }
 
                     // 2. Can enter home lane (safe from capture)?
                     if (pos.step < 51 && nextStep >= 51) {
-                        score += 500.0
+                        score += if (isHard) 1600.0 else 600.0
                     }
 
                     // 3. Can capture an opponent?
@@ -383,16 +424,35 @@ object LudoEngine {
                                 if (canCapture) break
                             }
                             if (canCapture) {
-                                score += 1200.0 // Top priority!
+                                score += if (isHard) 2500.0 else 1300.0
+                            }
+
+                            // On Hard mode: check if landing square is vulnerable to an opponent 1..6 steps behind
+                            if (isHard && !canCapture) {
+                                for (other in state.players) {
+                                    if (other.color == botPlayer.color || other.isFinished) continue
+                                    for (otherToken in other.tokens) {
+                                        val otherStep = (otherToken.position as? TokenPosition.OnBoard)?.step
+                                        if (otherStep != null && otherStep < 51) {
+                                            val otherTrack = LudoBoardMap.getTrackIndex(other.color, otherStep)
+                                            if (otherTrack != null) {
+                                                val distToTarget = (targetTrack - otherTrack + LudoBoardMap.TRACK_LENGTH) % LudoBoardMap.TRACK_LENGTH
+                                                if (distToTarget in 1..6) {
+                                                    score -= 800.0 // Vulnerability penalty on Hard!
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
 
-                        // 4. Land on a safe square?
+                        // 4. Land on a safe star square?
                         if (isSafe) {
-                            score += 250.0
+                            score += if (isHard) 900.0 else 300.0
                         }
 
-                        // 5. Is current position in danger of being captured?
+                        // 5. Escaping danger from current square?
                         val curTrack = LudoBoardMap.getTrackIndex(botPlayer.color, pos.step)
                         val curSafe = LudoBoardMap.isSafeSquare(botPlayer.color, pos.step)
                         if (curTrack != null && !curSafe) {
@@ -415,13 +475,13 @@ object LudoEngine {
                                 if (inDanger) break
                             }
                             if (inDanger) {
-                                score += 350.0 // Escaping danger!
+                                score += if (isHard) 1200.0 else 400.0
                             }
                         }
                     }
 
-                    // 6. Prefer moving tokens closer to home
-                    score += nextStep * 3.0
+                    // 6. Advancement progress bonus
+                    score += nextStep * (if (isHard) 6.0 else 3.5)
                 }
                 is TokenPosition.Finished -> {}
             }

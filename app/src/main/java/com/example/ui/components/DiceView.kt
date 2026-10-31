@@ -77,12 +77,13 @@ fun PlayerDiceControl(
     onRollDice: () -> Unit,
     modifier: Modifier = Modifier,
     alignRight: Boolean = false,
-    skin: GameSkin = GameSkin.CLASSIC
+    skin: GameSkin = GameSkin.CLASSIC,
+    extraTurnReason: String? = null
 ) {
     val canRoll = isCurrentTurn && !isGameOver && (turnPhase == TurnPhase.WAITING_FOR_ROLL) && !player.isBot && !diceState.isRolling
     val isBotThinking = isCurrentTurn && !isGameOver && player.isBot
 
-    val infiniteTransition = rememberInfiniteTransition(label = "handBounce_${player.color.name}")
+    val infiniteTransition = rememberInfiniteTransition(label = "playerTurn_${player.color.name}")
     val animatedHandOffset by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 6f,
@@ -93,6 +94,16 @@ fun PlayerDiceControl(
         label = "handBounceAnim"
     )
     val handOffsetX = if (canRoll) animatedHandOffset else 0f
+
+    val borderGlowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.50f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(650, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "borderGlow"
+    )
 
     Card(
         modifier = modifier
@@ -106,122 +117,182 @@ fun PlayerDiceControl(
             }
         ),
         border = androidx.compose.foundation.BorderStroke(
-            width = if (isCurrentTurn) 2.dp else 1.dp,
-            color = if (isCurrentTurn) Color(0xFFFBBF24) else Color(0xFF452213).copy(alpha = 0.5f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isCurrentTurn) 6.dp else 1.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            if (!alignRight) {
-                // Left aligned: [Kills/Deaths ⚔️💀] -> [Dice] -> [👈 Hand]
-                Column(
-                    horizontalAlignment = Alignment.Start,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "⚔️", fontSize = 11.sp)
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "${player.captures}",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "💀", fontSize = 11.sp)
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "${player.losses}",
-                            color = Color(0xFFCBD5E1),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                DiceFace(
-                    value = if (isCurrentTurn) diceState.value else 1,
-                    isRolling = if (isCurrentTurn) diceState.isRolling else false,
-                    accentColor = player.color.primaryColor,
-                    enabled = canRoll,
-                    onClick = onRollDice,
-                    diceSizeDp = 46.dp,
-                    skin = skin,
-                    modifier = if (canRoll) Modifier.testTag("roll_dice_button") else Modifier
+            width = if (isCurrentTurn) 2.5.dp else 1.dp,
+            brush = if (isCurrentTurn) {
+                Brush.linearGradient(
+                    listOf(
+                        Color(0xFFFFD700).copy(alpha = borderGlowAlpha),
+                        player.color.primaryColor.copy(alpha = borderGlowAlpha),
+                        Color(0xFFFDE047).copy(alpha = borderGlowAlpha)
+                    )
                 )
-
-                if (canRoll) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Box(
-                        modifier = Modifier.graphicsLayer { translationX = handOffsetX },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "👈", fontSize = 22.sp)
-                    }
-                } else if (isBotThinking) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "🤖", fontSize = 18.sp)
-                }
             } else {
-                // Right aligned: [👉 Hand] <- [Dice] <- [Kills/Deaths ⚔️💀]
-                if (canRoll) {
-                    Box(
-                        modifier = Modifier.graphicsLayer { translationX = -handOffsetX },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "👉", fontSize = 22.sp)
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                } else if (isBotThinking) {
-                    Text(text = "🤖", fontSize = 18.sp)
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
-
-                DiceFace(
-                    value = if (isCurrentTurn) diceState.value else 1,
-                    isRolling = if (isCurrentTurn) diceState.isRolling else false,
-                    accentColor = player.color.primaryColor,
-                    enabled = canRoll,
-                    onClick = onRollDice,
-                    diceSizeDp = 46.dp,
-                    skin = skin,
-                    modifier = if (canRoll) Modifier.testTag("roll_dice_button") else Modifier
+                Brush.linearGradient(
+                    listOf(Color(0xFF452213).copy(alpha = 0.5f), Color(0xFF2A150A).copy(alpha = 0.5f))
                 )
+            }
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isCurrentTurn) 8.dp else 1.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            horizontalAlignment = if (alignRight) Alignment.End else Alignment.Start
+        ) {
+            // Header: Avatar, Name & Optional Bonus Turn Chip
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = if (alignRight) Arrangement.End else Arrangement.Start
+            ) {
+                if (alignRight) {
+                    Text(
+                        text = player.name.take(7),
+                        color = if (isCurrentTurn) Color(0xFFFFD700) else Color(0xFFE2E8F0),
+                        fontWeight = if (isCurrentTurn) FontWeight.Black else FontWeight.SemiBold,
+                        fontSize = 11.sp
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(text = player.avatar.emoji, fontSize = 13.sp)
+                } else {
+                    Text(text = player.avatar.emoji, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = player.name.take(7),
+                        color = if (isCurrentTurn) Color(0xFFFFD700) else Color(0xFFE2E8F0),
+                        fontWeight = if (isCurrentTurn) FontWeight.Black else FontWeight.SemiBold,
+                        fontSize = 11.sp
+                    )
+                }
+            }
 
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.Center
+            // Prominent Bonus Turn Notification Chip when active
+            if (isCurrentTurn && !extraTurnReason.isNullOrEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFFE11D48),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE047)),
+                    modifier = Modifier.padding(vertical = 2.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "${player.captures}",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(text = "⚔️", fontSize = 11.sp)
+                    Text(
+                        text = "BONUS TURN! 🎲",
+                        color = Color.White,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 9.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                if (!alignRight) {
+                    // Left aligned: [Kills/Deaths ⚔️💀] -> [Dice] -> [👈 Hand]
+                    Column(
+                        horizontalAlignment = Alignment.Start,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "⚔️", fontSize = 10.sp)
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "${player.captures}",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(1.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "💀", fontSize = 10.sp)
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "${player.losses}",
+                                color = Color(0xFFCBD5E1),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "${player.losses}",
-                            color = Color(0xFFCBD5E1),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    DiceFace(
+                        value = if (isCurrentTurn) diceState.value else 1,
+                        isRolling = if (isCurrentTurn) diceState.isRolling else false,
+                        accentColor = player.color.primaryColor,
+                        enabled = canRoll,
+                        onClick = onRollDice,
+                        diceSizeDp = 44.dp,
+                        skin = skin,
+                        modifier = if (canRoll) Modifier.testTag("roll_dice_button") else Modifier
+                    )
+
+                    if (canRoll) {
                         Spacer(modifier = Modifier.width(3.dp))
-                        Text(text = "💀", fontSize = 11.sp)
+                        Box(
+                            modifier = Modifier.graphicsLayer { translationX = handOffsetX },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "👈", fontSize = 20.sp)
+                        }
+                    } else if (isBotThinking) {
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(text = "🤖", fontSize = 17.sp)
+                    }
+                } else {
+                    // Right aligned: [👉 Hand] <- [Dice] <- [Kills/Deaths ⚔️💀]
+                    if (canRoll) {
+                        Box(
+                            modifier = Modifier.graphicsLayer { translationX = -handOffsetX },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "👉", fontSize = 20.sp)
+                        }
+                        Spacer(modifier = Modifier.width(3.dp))
+                    } else if (isBotThinking) {
+                        Text(text = "🤖", fontSize = 17.sp)
+                        Spacer(modifier = Modifier.width(3.dp))
+                    }
+
+                    DiceFace(
+                        value = if (isCurrentTurn) diceState.value else 1,
+                        isRolling = if (isCurrentTurn) diceState.isRolling else false,
+                        accentColor = player.color.primaryColor,
+                        enabled = canRoll,
+                        onClick = onRollDice,
+                        diceSizeDp = 44.dp,
+                        skin = skin,
+                        modifier = if (canRoll) Modifier.testTag("roll_dice_button") else Modifier
+                    )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "${player.captures}",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(text = "⚔️", fontSize = 10.sp)
+                        }
+                        Spacer(modifier = Modifier.height(1.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "${player.losses}",
+                                color = Color(0xFFCBD5E1),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(text = "💀", fontSize = 10.sp)
+                        }
                     }
                 }
             }
@@ -237,11 +308,12 @@ fun DiceControlSection(
     isGameOver: Boolean,
     onRollDice: () -> Unit,
     modifier: Modifier = Modifier,
-    skin: GameSkin = GameSkin.CLASSIC
+    skin: GameSkin = GameSkin.CLASSIC,
+    extraTurnReason: String? = null
 ) {
     val canRoll = !isGameOver && (turnPhase == TurnPhase.WAITING_FOR_ROLL) && (player?.isBot == false) && !diceState.isRolling
 
-    val infiniteTransition = rememberInfiniteTransition(label = "handBounce")
+    val infiniteTransition = rememberInfiniteTransition(label = "diceSectionAnim")
     val handOffsetX by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 6f,
@@ -251,6 +323,18 @@ fun DiceControlSection(
         ),
         label = "handBounceAnim"
     )
+
+    val borderGlowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.50f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(650, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "borderGlow"
+    )
+
+    val playerColor = player?.color?.primaryColor ?: Color(0xFFFBBF24)
 
     Card(
         modifier = modifier
@@ -262,10 +346,20 @@ fun DiceControlSection(
             containerColor = Color(0xFF26130C).copy(alpha = 0.85f)
         ),
         border = androidx.compose.foundation.BorderStroke(
-            width = 1.5.dp,
-            color = Color(0xFF4A2818)
+            width = if (canRoll) 2.dp else 1.5.dp,
+            brush = if (canRoll) {
+                Brush.linearGradient(
+                    listOf(
+                        Color(0xFFFFD700).copy(alpha = borderGlowAlpha),
+                        playerColor.copy(alpha = borderGlowAlpha),
+                        Color(0xFFFDE047).copy(alpha = borderGlowAlpha)
+                    )
+                )
+            } else {
+                Brush.linearGradient(listOf(Color(0xFF4A2818), Color(0xFF2A150A)))
+            }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (canRoll) 6.dp else 4.dp)
     ) {
         Row(
             modifier = Modifier
@@ -333,7 +427,22 @@ fun DiceControlSection(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.Center
             ) {
-                if (diceState.consecutiveSixes > 0) {
+                if (!extraTurnReason.isNullOrEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFE11D48),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE047)),
+                        modifier = Modifier.padding(bottom = 3.dp)
+                    ) {
+                        Text(
+                            text = "BONUS TURN! 🎲",
+                            color = Color.White,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                } else if (diceState.consecutiveSixes > 0) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = Color(0xFFDC2626),
@@ -349,12 +458,18 @@ fun DiceControlSection(
                     }
                 }
 
-                Text(
-                    text = player?.name ?: "Player",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = Color.White
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    player?.avatar?.let {
+                        Text(text = it.emoji, fontSize = 16.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    Text(
+                        text = player?.name ?: "Player",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = Color.White
+                    )
+                }
 
                 Text(
                     text = when {

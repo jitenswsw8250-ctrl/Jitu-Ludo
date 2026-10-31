@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
@@ -57,7 +58,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.model.AiDifficulty
 import com.example.model.AnimationSpeed
+import com.example.model.BoardTheme
 import com.example.model.GameSkin
 
 @Composable
@@ -66,9 +69,13 @@ fun SettingsDialog(
     hapticsEnabled: Boolean,
     animationSpeed: AnimationSpeed,
     currentSkin: GameSkin,
+    aiDifficulty: AiDifficulty = AiDifficulty.MEDIUM,
+    boardTheme: BoardTheme = BoardTheme.CLASSIC,
     onToggleSound: () -> Unit,
     onToggleHaptics: () -> Unit,
     onSetAnimationSpeed: (AnimationSpeed) -> Unit,
+    onSetAiDifficulty: ((AiDifficulty) -> Unit)? = null,
+    onSetBoardTheme: ((BoardTheme) -> Unit)? = null,
     onOpenSkins: () -> Unit,
     onOpenRules: () -> Unit,
     onRestartMatch: (() -> Unit)? = null,
@@ -257,6 +264,138 @@ fun SettingsDialog(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
+
+                // SECTION 2b: AI DIFFICULTY
+                if (onSetAiDifficulty != null) {
+                    SettingsSectionHeader(title = "AI BOT DIFFICULTY")
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF261208)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF78350F).copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AiDifficulty.values().forEach { diff ->
+                                val isSelected = aiDifficulty == diff
+                                val diffColor = when (diff) {
+                                    AiDifficulty.EASY -> Color(0xFF4ADE80)
+                                    AiDifficulty.MEDIUM -> Color(0xFF38BDF8)
+                                    AiDifficulty.HARD -> Color(0xFFEF4444)
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(48.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            if (isSelected) {
+                                                Brush.verticalGradient(listOf(Color(0xFF0284C7), Color(0xFF0369A1)))
+                                            } else {
+                                                Brush.verticalGradient(listOf(Color(0xFF1E0C04), Color(0xFF140804)))
+                                            }
+                                        )
+                                        .border(
+                                            1.5.dp,
+                                            if (isSelected) Color(0xFF38BDF8) else Color(0xFF78350F).copy(alpha = 0.5f),
+                                            RoundedCornerShape(10.dp)
+                                        )
+                                        .clickable { onSetAiDifficulty(diff) }
+                                        .testTag("settings_difficulty_${diff.name.lowercase()}"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            text = diff.title,
+                                            fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            color = if (isSelected) Color.White else Color(0xFFCBD5E1)
+                                        )
+                                        Text(
+                                            text = when (diff) {
+                                                AiDifficulty.EASY -> "Casual"
+                                                AiDifficulty.MEDIUM -> "Balanced"
+                                                AiDifficulty.HARD -> "Tactical"
+                                            },
+                                            fontSize = 9.sp,
+                                            color = if (isSelected) Color(0xFFE0F2FE) else diffColor,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                // SECTION 2c: BOARD THEME
+                if (onSetBoardTheme != null) {
+                    SettingsSectionHeader(title = "BOARD THEME")
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF261208)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF78350F).copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            BoardTheme.values().forEach { theme ->
+                                val isSelected = boardTheme == theme
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(48.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            if (isSelected) {
+                                                Brush.verticalGradient(listOf(Color(0xFFB45309), Color(0xFF78350F)))
+                                            } else {
+                                                Brush.verticalGradient(listOf(Color(0xFF1E0C04), Color(0xFF140804)))
+                                            }
+                                        )
+                                        .border(
+                                            1.5.dp,
+                                            if (isSelected) Color(0xFFFDE047) else Color(0xFF78350F).copy(alpha = 0.5f),
+                                            RoundedCornerShape(10.dp)
+                                        )
+                                        .clickable { onSetBoardTheme(theme) }
+                                        .testTag("settings_theme_${theme.name.lowercase()}"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            text = theme.title,
+                                            fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            color = if (isSelected) Color.White else Color(0xFFCBD5E1)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
 
                 // SECTION 3: SKINS & APPEARANCE
                 SettingsSectionHeader(title = "CUSTOMIZATION")

@@ -81,12 +81,16 @@ private data class ConfettiParticle(
 fun VictoryDialog(
     podium: List<Player>,
     allPlayers: List<Player>,
+    matchDurationSeconds: Long = 0L,
     onPlayAgain: () -> Unit,
     onHome: () -> Unit,
     onOpenStats: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val winner = podium.firstOrNull() ?: allPlayers.firstOrNull()
+    val minutes = matchDurationSeconds / 60
+    val seconds = matchDurationSeconds % 60
+    val durationText = "${minutes}m ${seconds}s"
 
     val infiniteTransition = rememberInfiniteTransition(label = "victoryGlow")
     val trophyBob by infiniteTransition.animateFloat(
@@ -268,22 +272,50 @@ fun VictoryDialog(
                         Spacer(modifier = Modifier.height(4.dp))
 
                         val winnerName = winner?.name ?: "Player"
-                        Text(
-                            text = "$winnerName Wins The Match!",
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            textAlign = TextAlign.Center
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = winner?.avatar?.emoji ?: "👑",
+                                fontSize = 24.sp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "$winnerName Wins The Match!",
+                                fontSize = 19.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                textAlign = TextAlign.Center
+                            )
+                        }
 
-                        Text(
-                            text = "All 4 tokens reached home safely!",
-                            fontSize = 13.sp,
-                            color = Color(0xFFCBD5E1),
-                            textAlign = TextAlign.Center
-                        )
+                        Spacer(modifier = Modifier.height(6.dp))
 
-                        Spacer(modifier = Modifier.height(18.dp))
+                        // Match Duration Badge
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF26130C))
+                                .border(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "⏱️", fontSize = 13.sp)
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = "Game Duration: $durationText",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFFDE68A),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
 
                         // Podium Rankings Card
                         Card(
@@ -325,12 +357,12 @@ fun VictoryDialog(
                                                 if (index == 0) player.color.primaryColor else Color(0xFF451A03),
                                                 RoundedCornerShape(10.dp)
                                             )
-                                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                                            .padding(horizontal = 8.dp, vertical = 7.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Box(
                                             modifier = Modifier
-                                                .size(26.dp)
+                                                .size(24.dp)
                                                 .clip(CircleShape)
                                                 .background(rankColor.copy(alpha = 0.25f)),
                                             contentAlignment = Alignment.Center
@@ -343,16 +375,24 @@ fun VictoryDialog(
                                             )
                                         }
 
-                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+
+                                        // Player Avatar Emoji
+                                        Text(
+                                            text = player.avatar.emoji,
+                                            fontSize = 16.sp
+                                        )
+
+                                        Spacer(modifier = Modifier.width(5.dp))
 
                                         Box(
                                             modifier = Modifier
-                                                .size(12.dp)
+                                                .size(10.dp)
                                                 .clip(CircleShape)
                                                 .background(player.color.primaryColor)
                                         )
 
-                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
 
                                         Text(
                                             text = player.name,
@@ -361,6 +401,21 @@ fun VictoryDialog(
                                             color = Color.White,
                                             modifier = Modifier.weight(1f)
                                         )
+
+                                        // Total captures
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        ) {
+                                            Text(text = "⚔️", fontSize = 11.sp)
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text(
+                                                text = "${player.captures}",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFFF1F5F9)
+                                            )
+                                        }
 
                                         Text(
                                             text = "$homeCount/4 Home",

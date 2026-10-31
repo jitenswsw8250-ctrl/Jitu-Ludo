@@ -28,12 +28,14 @@ import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
@@ -101,11 +103,13 @@ fun GameScreen(
     onSetAnimationSpeed: (com.example.model.AnimationSpeed) -> Unit = {},
     onSetSkin: (com.example.model.GameSkin) -> Unit = {},
     onOpenStats: () -> Unit,
+    onSendEmojiReaction: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showRulesDialog by remember { mutableStateOf(false) }
     var showSettingsMenu by remember { mutableStateOf(false) }
     var showSkinsDialog by remember { mutableStateOf(false) }
+    var showEmojiPicker by remember { mutableStateOf(false) }
     var boardBounds by remember { mutableStateOf<Rect?>(null) }
     var rootCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
@@ -170,7 +174,8 @@ fun GameScreen(
                         isGameOver = gameState.isGameOver,
                         onRollDice = onRollDice,
                         alignRight = false,
-                        skin = gameState.currentSkin
+                        skin = gameState.currentSkin,
+                        extraTurnReason = gameState.extraTurnReason
                     )
                 } else {
                     Spacer(modifier = Modifier.width(48.dp))
@@ -185,7 +190,8 @@ fun GameScreen(
                         isGameOver = gameState.isGameOver,
                         onRollDice = onRollDice,
                         alignRight = true,
-                        skin = gameState.currentSkin
+                        skin = gameState.currentSkin,
+                        extraTurnReason = gameState.extraTurnReason
                     )
                 } else {
                     Spacer(modifier = Modifier.width(48.dp))
@@ -240,7 +246,8 @@ fun GameScreen(
                         isGameOver = gameState.isGameOver,
                         onRollDice = onRollDice,
                         alignRight = false,
-                        skin = gameState.currentSkin
+                        skin = gameState.currentSkin,
+                        extraTurnReason = gameState.extraTurnReason
                     )
                 } else {
                     Spacer(modifier = Modifier.width(48.dp))
@@ -272,7 +279,8 @@ fun GameScreen(
                         isGameOver = gameState.isGameOver,
                         onRollDice = onRollDice,
                         alignRight = true,
-                        skin = gameState.currentSkin
+                        skin = gameState.currentSkin,
+                        extraTurnReason = gameState.extraTurnReason
                     )
                 } else {
                     Spacer(modifier = Modifier.width(48.dp))
@@ -281,6 +289,46 @@ fun GameScreen(
 
             // Balanced spacing to push bottom action bar down responsively while centering game content
             Spacer(modifier = Modifier.weight(1f))
+
+            // In-game Emoji Picker Palette (😂 😎 👏 🔥 ❤️ 😮 🎉)
+            AnimatedVisibility(
+                visible = showEmojiPicker,
+                enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                exit = fadeOut() + androidx.compose.animation.scaleOut()
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .padding(bottom = 6.dp)
+                        .testTag("emoji_picker_palette"),
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xEE1E0E07),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFFBBF24)),
+                    shadowElevation = 8.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val reactions = listOf("😂", "😎", "👏", "🔥", "❤️", "😮", "🎉")
+                        reactions.forEach { emoji ->
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        onSendEmojiReaction(emoji)
+                                        showEmojiPicker = false
+                                    }
+                                    .testTag("reaction_emoji_$emoji"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = emoji, fontSize = 22.sp)
+                            }
+                        }
+                    }
+                }
+            }
 
             // 4. BOTTOM ACTION BAR (Circular vibrant green buttons matching reference photo)
             Row(
@@ -327,11 +375,20 @@ fun GameScreen(
                     )
                 }
 
-                // Right action buttons: Sound Mute/Unmute, Statistics, and Settings Gear
+                // Right action buttons: Reactions, Sound Mute/Unmute, Statistics, and Settings Gear
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    CircularGreenButton(
+                        icon = {
+                            Text(text = "😀", fontSize = 18.sp)
+                        },
+                        onClick = { showEmojiPicker = !showEmojiPicker },
+                        contentDescription = "Emoji Reaction",
+                        testTag = "game_reaction_toggle_button"
+                    )
+
                     CircularGreenButton(
                         icon = {
                             Icon(
@@ -391,6 +448,18 @@ fun GameScreen(
                 // Future banner advertisement space
             }
         }
+
+        // Floating Animated Emoji Reaction Overlay (non-blocking)
+        gameState.activeReaction?.let { reaction ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 70.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                FloatingReactionBubble(reaction = reaction)
+            }
+        }
     }
 
     // Settings Modal
@@ -433,6 +502,7 @@ fun GameScreen(
         VictoryDialog(
             podium = gameState.winnerPodium,
             allPlayers = gameState.players,
+            matchDurationSeconds = gameState.matchDurationSeconds,
             onPlayAgain = onRestartGame,
             onHome = onNavigateHome,
             onOpenStats = onOpenStats
@@ -442,6 +512,58 @@ fun GameScreen(
     // Rules Modal
     if (showRulesDialog) {
         RulesDialog(onDismiss = { showRulesDialog = false })
+    }
+}
+
+@Composable
+private fun FloatingReactionBubble(reaction: com.example.model.EmojiReactionEvent) {
+    val infiniteTransition = rememberInfiniteTransition(label = "bubbleFloat")
+    val floatOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -16f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "bubbleFloatAnim"
+    )
+
+    Card(
+        modifier = Modifier
+            .graphicsLayer { translationY = floatOffset }
+            .testTag("active_emoji_reaction_bubble"),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xEE1E0E07)),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 2.dp,
+            brush = Brush.linearGradient(
+                listOf(Color(0xFFFFFBEB), Color(0xFFFDE047), Color(0xFFF59E0B))
+            )
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 14.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(14.dp)
+                    .background(reaction.senderColor.primaryColor, CircleShape)
+                    .border(1.5.dp, Color(0xFFFFD700), CircleShape)
+            )
+            Text(
+                text = reaction.senderName,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp
+            )
+            Text(
+                text = reaction.emoji,
+                fontSize = 32.sp
+            )
+        }
     }
 }
 

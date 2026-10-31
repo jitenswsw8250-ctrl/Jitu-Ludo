@@ -61,10 +61,110 @@ data class Token(
     val step: Int? get() = (position as? TokenPosition.OnBoard)?.step
 }
 
+enum class PlayerAvatar(
+    val id: String,
+    val emoji: String,
+    val title: String,
+    val subtitle: String
+) {
+    KING("king", "👑", "King", "Royal Monarch"),
+    TIGER("tiger", "🐯", "Tiger", "Fierce Striker"),
+    NINJA("ninja", "🥷", "Ninja", "Silent Master"),
+    LION("lion", "🦁", "Lion", "Majestic Leader"),
+    ROBOT("robot", "🤖", "Robot", "Smart Cyborg"),
+    WIZARD("wizard", "🧙‍♂️", "Wizard", "Arcane Mage"),
+    FALCON("falcon", "🦅", "Falcon", "Swift Scout"),
+    STAR("star", "⭐", "Superstar", "Lucky Legend"),
+    DRAGON("dragon", "🐲", "Dragon", "Mythic Power"),
+    QUEEN("queen", "👸", "Queen", "Imperial Grace");
+
+    companion object {
+        fun fromId(id: String?): PlayerAvatar {
+            return values().find { it.id.equals(id, ignoreCase = true) } ?: KING
+        }
+
+        fun defaultFor(color: PlayerColor): PlayerAvatar {
+            return when (color) {
+                PlayerColor.RED -> TIGER
+                PlayerColor.GREEN -> NINJA
+                PlayerColor.YELLOW -> LION
+                PlayerColor.BLUE -> ROBOT
+            }
+        }
+    }
+}
+
+enum class BoardTheme(
+    val id: String,
+    val title: String,
+    val description: String,
+    val boardBackground: Color,
+    val trackCellFill: Color,
+    val trackCellBorder: Color,
+    val starColor: Color,
+    val frameBorderBrushColors: List<Color>,
+    val outerBackground: Color
+) {
+    CLASSIC(
+        id = "classic",
+        title = "Classic",
+        description = "Traditional porcelain white & gold",
+        boardBackground = Color(0xFFFAFAFA),
+        trackCellFill = Color(0xFFFFFFFF),
+        trackCellBorder = Color(0xFFCBD5E1),
+        starColor = Color(0xFFF59E0B),
+        frameBorderBrushColors = listOf(
+            Color(0xFFFFFBEB), Color(0xFFFDE047), Color(0xFFF59E0B), Color(0xFF78350F), Color(0xFFFDE047)
+        ),
+        outerBackground = Color(0xFF150A05)
+    ),
+    NIGHT(
+        id = "night",
+        title = "Night",
+        description = "Deep cosmic obsidian & glowing neon stars",
+        boardBackground = Color(0xFF0F172A),
+        trackCellFill = Color(0xFF1E293B),
+        trackCellBorder = Color(0xFF334155),
+        starColor = Color(0xFF38BDF8),
+        frameBorderBrushColors = listOf(
+            Color(0xFF38BDF8), Color(0xFF0284C7), Color(0xFF6366F1), Color(0xFF1E1B4B), Color(0xFF38BDF8)
+        ),
+        outerBackground = Color(0xFF070B14)
+    ),
+    ROYAL_GOLD(
+        id = "royal_gold",
+        title = "Royal Gold",
+        description = "Regal amber marble & imperial luster",
+        boardBackground = Color(0xFFFFFBEB),
+        trackCellFill = Color(0xFFFEF3C7),
+        trackCellBorder = Color(0xFFD97706),
+        starColor = Color(0xFFDC2626),
+        frameBorderBrushColors = listOf(
+            Color(0xFFFFFBEB), Color(0xFFFDE047), Color(0xFFF59E0B), Color(0xFFB45309), Color(0xFFFFFBEB)
+        ),
+        outerBackground = Color(0xFF261208)
+    );
+
+    companion object {
+        fun fromId(id: String?): BoardTheme {
+            return values().find { it.id.equals(id, ignoreCase = true) || it.name.equals(id, ignoreCase = true) } ?: CLASSIC
+        }
+    }
+}
+
+data class EmojiReactionEvent(
+    val id: Long = System.currentTimeMillis(),
+    val emoji: String,
+    val senderName: String,
+    val senderColor: PlayerColor,
+    val timestampMs: Long = System.currentTimeMillis()
+)
+
 data class Player(
     val color: PlayerColor,
     val name: String,
     val isBot: Boolean = false,
+    val avatar: PlayerAvatar = PlayerAvatar.defaultFor(color),
     val tokens: List<Token> = List(4) { Token(id = it, color = color) },
     val rank: Int? = null, // 1st, 2nd, 3rd, 4th
     val captures: Int = 0,
@@ -172,12 +272,45 @@ enum class AnimationSpeed(
     FAST("Fast", 60L)
 }
 
+enum class AiDifficulty(
+    val title: String,
+    val description: String
+) {
+    EASY("Easy", "Casual, relaxed moves"),
+    MEDIUM("Medium", "Balanced tactical play"),
+    HARD("Hard", "Aggressive & calculated moves")
+}
+
+data class MatchPlayerSummary(
+    val name: String,
+    val color: PlayerColor,
+    val isBot: Boolean,
+    val captures: Int,
+    val tokensHome: Int,
+    val avatar: PlayerAvatar = PlayerAvatar.defaultFor(color)
+)
+
+data class MatchHistoryRecord(
+    val id: String,
+    val timestampMs: Long,
+    val formattedDate: String,
+    val gameMode: GameMode,
+    val aiDifficulty: AiDifficulty?,
+    val winnerName: String,
+    val winnerColor: PlayerColor,
+    val winnerAvatar: PlayerAvatar = PlayerAvatar.defaultFor(winnerColor),
+    val durationSeconds: Long = 0L,
+    val players: List<MatchPlayerSummary>
+)
+
 data class GameState(
+    val matchId: String = java.util.UUID.randomUUID().toString(),
     val players: List<Player> = emptyList(),
     val currentTurnIndex: Int = 0,
     val diceState: DiceState = DiceState(),
     val phase: TurnPhase = TurnPhase.WAITING_FOR_ROLL,
     val gameMode: GameMode = GameMode.LOCAL_MULTIPLAYER,
+    val aiDifficulty: AiDifficulty = AiDifficulty.MEDIUM,
     val movableTokenIds: Set<Int> = emptySet(),
     val statusMessage: String = "Roll the dice to start!",
     val winnerPodium: List<Player> = emptyList(),
@@ -187,7 +320,12 @@ data class GameState(
     val autoRollBots: Boolean = true,
     val captureEvent: CaptureAnimationEvent? = null,
     val currentSkin: GameSkin = GameSkin.CLASSIC,
-    val animationSpeed: AnimationSpeed = AnimationSpeed.NORMAL
+    val boardTheme: BoardTheme = BoardTheme.CLASSIC,
+    val animationSpeed: AnimationSpeed = AnimationSpeed.NORMAL,
+    val matchStartTimeMs: Long = System.currentTimeMillis(),
+    val matchDurationSeconds: Long = 0L,
+    val activeReaction: EmojiReactionEvent? = null,
+    val extraTurnReason: String? = null
 ) {
     val currentPlayer: Player?
         get() = players.getOrNull(currentTurnIndex)

@@ -31,14 +31,21 @@ import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -48,6 +55,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -70,7 +78,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.model.AiDifficulty
+import com.example.model.BoardTheme
 import com.example.model.GameMode
+import com.example.model.PlayerAvatar
 import com.example.model.PlayerColor
 
 /**
@@ -87,9 +98,17 @@ fun HomeScreen(
     hapticsEnabled: Boolean,
     onToggleSound: () -> Unit,
     onToggleHaptics: () -> Unit,
-    onStartGame: (mode: GameMode, playerCount: Int, humanColor: PlayerColor, names: Map<PlayerColor, String>) -> Unit,
+    hasSavedGame: Boolean = false,
+    onResumeGame: () -> Unit = {},
+    selectedDifficulty: AiDifficulty = AiDifficulty.MEDIUM,
+    onDifficultySelected: (AiDifficulty) -> Unit = {},
+    boardTheme: BoardTheme = BoardTheme.CLASSIC,
+    onSetBoardTheme: (BoardTheme) -> Unit = {},
+    savedAvatars: Map<PlayerColor, PlayerAvatar> = emptyMap(),
+    onStartGame: (mode: GameMode, playerCount: Int, humanColor: PlayerColor, names: Map<PlayerColor, String>, avatars: Map<PlayerColor, PlayerAvatar>) -> Unit,
     onOpenRules: () -> Unit,
     onOpenStats: () -> Unit,
+    onOpenHistory: () -> Unit = {},
     onOpenWebView: () -> Unit,
     onShareGame: () -> Unit,
     onOpenSettings: () -> Unit = {},
@@ -99,6 +118,8 @@ fun HomeScreen(
     var selectedMode by remember { mutableStateOf(GameMode.LOCAL_MULTIPLAYER) }
     var playerCount by remember { mutableIntStateOf(2) }
     var humanColor by remember { mutableStateOf(PlayerColor.RED) }
+    var showConfirmDiscardDialog by remember { mutableStateOf(false) }
+    var avatarPickingColor by remember { mutableStateOf<PlayerColor?>(null) }
 
     val playerNames = remember {
         mutableStateMapOf(
@@ -106,6 +127,15 @@ fun HomeScreen(
             PlayerColor.YELLOW to "Player 2",
             PlayerColor.GREEN to "Player 3",
             PlayerColor.BLUE to "Player 4"
+        )
+    }
+
+    val playerAvatars = remember {
+        mutableStateMapOf(
+            PlayerColor.RED to (savedAvatars[PlayerColor.RED] ?: PlayerAvatar.KING),
+            PlayerColor.YELLOW to (savedAvatars[PlayerColor.YELLOW] ?: PlayerAvatar.LION),
+            PlayerColor.GREEN to (savedAvatars[PlayerColor.GREEN] ?: PlayerAvatar.TIGER),
+            PlayerColor.BLUE to (savedAvatars[PlayerColor.BLUE] ?: PlayerAvatar.WIZARD)
         )
     }
 
@@ -145,11 +175,26 @@ fun HomeScreen(
                 // 1. REFINED JITU LUDO TITLE PANEL / HERO CARD
                 TitleHeroCard()
 
+                // RESUME SAVED GAME BANNER (If an unfinished match is available)
+                if (hasSavedGame) {
+                    ResumeGameBannerCard(
+                        onResumeGame = onResumeGame
+                    )
+                }
+
                 // 2. SELECT GAME MODE
                 GameModeSelectionCard(
                     selectedMode = selectedMode,
                     onModeSelected = { selectedMode = it }
                 )
+
+                // AI DIFFICULTY (Only in Vs Computer mode)
+                if (selectedMode == GameMode.VS_COMPUTER) {
+                    AiDifficultySelectionCard(
+                        selectedDifficulty = selectedDifficulty,
+                        onDifficultySelected = onDifficultySelected
+                    )
+                }
 
                 // 3. NUMBER OF PLAYERS
                 PlayerCountSelectionCard(
@@ -165,12 +210,20 @@ fun HomeScreen(
                     )
                 }
 
-                // 5. PLAYER NAMES INPUTS
+                // 5. PLAYER NAMES & AVATARS
                 PlayerNamesCard(
                     selectedMode = selectedMode,
                     playerCount = playerCount,
                     humanColor = humanColor,
-                    playerNames = playerNames
+                    playerNames = playerNames,
+                    playerAvatars = playerAvatars,
+                    onSelectAvatar = { color -> avatarPickingColor = color }
+                )
+
+                // 5b. BOARD THEME SELECTION
+                BoardThemeSelectionCard(
+                    selectedTheme = boardTheme,
+                    onThemeSelected = onSetBoardTheme
                 )
 
                 // 6. GAME SETTINGS (Sound & Vibration)
@@ -181,11 +234,12 @@ fun HomeScreen(
                     onToggleHaptics = onToggleHaptics
                 )
 
-                // 7. COMPACT SECONDARY UTILITY BAR (Skins, Settings, Stats, Rules, Share)
+                // 7. COMPACT SECONDARY UTILITY BAR (History, Stats, Skins, Settings, Rules, Share)
                 QuickUtilityBar(
                     onShareGame = onShareGame,
                     onOpenRules = onOpenRules,
                     onOpenStats = onOpenStats,
+                    onOpenHistory = onOpenHistory,
                     onOpenSettings = onOpenSettings,
                     onOpenSkins = onOpenSkins
                 )
@@ -195,7 +249,7 @@ fun HomeScreen(
             }
 
             // =========================================================================
-            // DOCKED / PINNED BOTTOM CONTAINER FOR "START GAME"
+            // DOCKED / PINNED BOTTOM CONTAINER FOR ACTIONS
             // Pinned above the Android navigation bar and system safe area so it is
             // ALWAYS visible and easily accessible with the user's thumb without scrolling.
             // =========================================================================
@@ -207,20 +261,104 @@ fun HomeScreen(
                 shadowElevation = 16.dp,
                 border = BorderStroke(1.dp, Color(0xFFB45309).copy(alpha = 0.40f))
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    StartGameButton(
-                        onClick = {
-                            onStartGame(selectedMode, playerCount, humanColor, playerNames)
-                        }
-                    )
+                if (hasSavedGame) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ResumeGameButton(onClick = onResumeGame)
+                        StartGameButton(
+                            text = "START NEW GAME",
+                            isSecondary = true,
+                            onClick = {
+                                showConfirmDiscardDialog = true
+                            }
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        StartGameButton(
+                            text = "START GAME",
+                            isSecondary = false,
+                            onClick = {
+                                onStartGame(selectedMode, playerCount, humanColor, playerNames, playerAvatars)
+                            }
+                        )
+                    }
                 }
             }
         }
+    }
+
+    if (showConfirmDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDiscardDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = Color(0xFFF59E0B)
+                )
+            },
+            title = {
+                Text(
+                    text = "Start New Game?",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            },
+            text = {
+                Text(
+                    text = "You have an unfinished game in progress. Starting a new game will discard your current match progress and cannot be undone.",
+                    color = Color(0xFFCBD5E1),
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showConfirmDiscardDialog = false
+                        onStartGame(selectedMode, playerCount, humanColor, playerNames, playerAvatars)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    modifier = Modifier.testTag("confirm_discard_and_start_button")
+                ) {
+                    Text(text = "Discard & Start", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showConfirmDiscardDialog = false },
+                    modifier = Modifier.testTag("cancel_discard_and_start_button")
+                ) {
+                    Text(text = "Cancel", color = Color(0xFF94A3B8))
+                }
+            },
+            containerColor = Color(0xFF1E0E07),
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+
+    avatarPickingColor?.let { color ->
+        val currentAv = playerAvatars[color] ?: PlayerAvatar.KING
+        val currentName = playerNames[color] ?: color.title
+        AvatarSelectionDialog(
+            playerColor = color,
+            playerName = currentName,
+            currentAvatar = currentAv,
+            onAvatarSelected = { avatar ->
+                playerAvatars[color] = avatar
+                avatarPickingColor = null
+            },
+            onDismiss = { avatarPickingColor = null }
+        )
     }
 }
 
@@ -815,7 +953,9 @@ private fun PlayerNamesCard(
     selectedMode: GameMode,
     playerCount: Int,
     humanColor: PlayerColor,
-    playerNames: MutableMap<PlayerColor, String>
+    playerNames: MutableMap<PlayerColor, String>,
+    playerAvatars: Map<PlayerColor, PlayerAvatar>,
+    onSelectAvatar: (PlayerColor) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -835,7 +975,7 @@ private fun PlayerNamesCard(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "PLAYER NAMES",
+                    text = "PLAYER NAMES & AVATARS",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFFFDE047),
@@ -876,11 +1016,12 @@ private fun PlayerNamesCard(
 
             activeColors.forEachIndexed { index, color ->
                 val isBot = (selectedMode == GameMode.VS_COMPUTER && color != humanColor)
+                val currentAvatar = if (isBot) PlayerAvatar.ROBOT else (playerAvatars[color] ?: PlayerAvatar.KING)
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 3.dp),
+                        .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Numbered colored badge matching screenshot
@@ -904,7 +1045,34 @@ private fun PlayerNamesCard(
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Selectable Avatar Button
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(Color(0xFF3B1D0E), Color(0xFF1E0E07))
+                                )
+                            )
+                            .border(
+                                1.5.dp,
+                                if (!isBot) Color(0xFFFDE047) else Color(0xFF78350F).copy(alpha = 0.5f),
+                                CircleShape
+                            )
+                            .clickable(enabled = !isBot) { onSelectAvatar(color) }
+                            .testTag("avatar_button_${color.name.lowercase()}"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = currentAvatar.emoji,
+                            fontSize = 20.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     OutlinedTextField(
                         value = if (isBot) "Bot ${color.title}" else (playerNames[color] ?: "Player ${index + 1}"),
@@ -939,6 +1107,86 @@ private fun PlayerNamesCard(
                         ),
                         textStyle = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     )
+                }
+            }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 5b. Board Theme Selection Card
+// -----------------------------------------------------------------------------
+
+@Composable
+private fun BoardThemeSelectionCard(
+    selectedTheme: BoardTheme,
+    onThemeSelected: (BoardTheme) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.5.dp, Color(0xFFB45309).copy(alpha = 0.55f)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1008)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Palette,
+                    contentDescription = null,
+                    tint = Color(0xFFF59E0B),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "BOARD THEME",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFDE047),
+                    letterSpacing = 1.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                BoardTheme.values().forEach { theme ->
+                    val isSelected = selectedTheme == theme
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isSelected) {
+                                    Brush.verticalGradient(
+                                        listOf(Color(0xFFB45309), Color(0xFF78350F))
+                                    )
+                                } else {
+                                    Brush.verticalGradient(
+                                        listOf(Color(0xFF180A04), Color(0xFF0F0602))
+                                    )
+                                }
+                            )
+                            .border(
+                                width = if (isSelected) 2.dp else 1.dp,
+                                color = if (isSelected) Color(0xFFFDE047) else Color(0xFF78350F).copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .clickable { onThemeSelected(theme) }
+                            .testTag("board_theme_${theme.name.lowercase()}"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = theme.title,
+                            color = if (isSelected) Color.White else Color(0xFFE2E8F0),
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             }
         }
@@ -1086,7 +1334,213 @@ private fun SettingTogglePill(
 }
 
 // -----------------------------------------------------------------------------
-// 7. Compact Secondary Utility Bar (Share, Rules, Stats, Web)
+// 1b. Resume Saved Game Banner Card
+// -----------------------------------------------------------------------------
+
+@Composable
+private fun ResumeGameBannerCard(
+    onResumeGame: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onResumeGame() }
+            .testTag("resume_game_banner_card"),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(
+            width = 2.dp,
+            brush = Brush.linearGradient(
+                listOf(
+                    Color(0xFF38BDF8),
+                    Color(0xFF0284C7),
+                    Color(0xFFFDE047),
+                    Color(0xFF0284C7)
+                )
+            )
+        ),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xFF0C4A6E),
+                            Color(0xFF075985),
+                            Color(0xFF082F49)
+                        )
+                    )
+                )
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFFDE047),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.PlayCircle,
+                                contentDescription = null,
+                                tint = Color(0xFF082F49),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "UNFINISHED MATCH FOUND",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 12.sp,
+                                color = Color(0xFFFDE047),
+                                letterSpacing = 0.8.sp
+                            )
+                        }
+                        Text(
+                            text = "Tap to resume exactly where you left off",
+                            fontSize = 11.sp,
+                            color = Color(0xFFE0F2FE),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF22C55E),
+                    border = BorderStroke(1.dp, Color(0xFF86EFAC))
+                ) {
+                    Text(
+                        text = "RESUME",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 2b. AI Difficulty Selection Card (Vs Computer)
+// -----------------------------------------------------------------------------
+
+@Composable
+private fun AiDifficultySelectionCard(
+    selectedDifficulty: AiDifficulty,
+    onDifficultySelected: (AiDifficulty) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.5.dp, Color(0xFFB45309).copy(alpha = 0.55f)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1008)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Psychology,
+                    contentDescription = null,
+                    tint = Color(0xFFF59E0B),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "AI DIFFICULTY",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFDE047),
+                    letterSpacing = 1.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AiDifficulty.values().forEach { difficulty ->
+                    val isSelected = selectedDifficulty == difficulty
+                    val (badgeColor, subtitle) = when (difficulty) {
+                        AiDifficulty.EASY -> Color(0xFF4ADE80) to "Casual"
+                        AiDifficulty.MEDIUM -> Color(0xFF38BDF8) to "Balanced"
+                        AiDifficulty.HARD -> Color(0xFFEF4444) to "Tactical"
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isSelected) {
+                                    Brush.verticalGradient(
+                                        listOf(Color(0xFF0284C7), Color(0xFF0369A1))
+                                    )
+                                } else {
+                                    Brush.verticalGradient(
+                                        listOf(Color(0xFF26130A), Color(0xFF1B0B04))
+                                    )
+                                }
+                            )
+                            .border(
+                                width = if (isSelected) 2.dp else 1.dp,
+                                color = if (isSelected) Color(0xFF38BDF8) else Color(0xFF78350F).copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) { onDifficultySelected(difficulty) }
+                            .testTag("difficulty_${difficulty.name.lowercase()}"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = difficulty.title,
+                                color = if (isSelected) Color.White else Color(0xFFE2E8F0),
+                                fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                text = subtitle,
+                                color = if (isSelected) Color(0xFFE0F2FE) else badgeColor,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 7. Compact Secondary Utility Bar (History, Stats, Skins, Settings, Rules, Share)
 // -----------------------------------------------------------------------------
 
 @Composable
@@ -1094,63 +1548,81 @@ private fun QuickUtilityBar(
     onShareGame: () -> Unit,
     onOpenRules: () -> Unit,
     onOpenStats: () -> Unit,
+    onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSkins: () -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Skins Button
-        UtilityButton(
-            text = "Skins",
-            icon = Icons.Default.Palette,
-            onClick = onOpenSkins,
-            modifier = Modifier.weight(1f),
-            testTag = "home_skins_button",
-            accentColor = Color(0xFFFDE047)
-        )
+        // Row 1: History, Stats, Skins
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            UtilityButton(
+                text = "History",
+                icon = Icons.Default.History,
+                onClick = onOpenHistory,
+                modifier = Modifier.weight(1f),
+                testTag = "home_history_button",
+                accentColor = Color(0xFFFDE047)
+            )
 
-        // Settings Button
-        UtilityButton(
-            text = "Settings",
-            icon = Icons.Default.Settings,
-            onClick = onOpenSettings,
-            modifier = Modifier.weight(1f),
-            testTag = "home_settings_button",
-            accentColor = Color(0xFF38BDF8)
-        )
+            UtilityButton(
+                text = "Stats",
+                icon = Icons.Default.BarChart,
+                onClick = onOpenStats,
+                modifier = Modifier.weight(1f),
+                testTag = "home_statistics_button",
+                accentColor = Color(0xFF34D399)
+            )
 
-        // Statistics Button
-        UtilityButton(
-            text = "Stats",
-            icon = Icons.Default.BarChart,
-            onClick = onOpenStats,
-            modifier = Modifier.weight(1f),
-            testTag = "home_statistics_button",
-            accentColor = Color(0xFF34D399)
-        )
+            UtilityButton(
+                text = "Skins",
+                icon = Icons.Default.Palette,
+                onClick = onOpenSkins,
+                modifier = Modifier.weight(1f),
+                testTag = "home_skins_button",
+                accentColor = Color(0xFFE879F9)
+            )
+        }
 
-        // Rules Button
-        UtilityButton(
-            text = "Rules",
-            icon = Icons.AutoMirrored.Filled.HelpOutline,
-            onClick = onOpenRules,
-            modifier = Modifier.weight(1f),
-            testTag = "home_rules_button",
-            accentColor = Color(0xFFFBBF24)
-        )
+        // Row 2: Settings, Rules, Share
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            UtilityButton(
+                text = "Settings",
+                icon = Icons.Default.Settings,
+                onClick = onOpenSettings,
+                modifier = Modifier.weight(1f),
+                testTag = "home_settings_button",
+                accentColor = Color(0xFF38BDF8)
+            )
 
-        // Share Game Button
-        UtilityButton(
-            text = "Share",
-            icon = Icons.Default.Share,
-            onClick = onShareGame,
-            modifier = Modifier.weight(1f),
-            testTag = "home_share_button",
-            accentColor = Color(0xFFA78BFA)
-        )
+            UtilityButton(
+                text = "Rules",
+                icon = Icons.AutoMirrored.Filled.HelpOutline,
+                onClick = onOpenRules,
+                modifier = Modifier.weight(1f),
+                testTag = "home_rules_button",
+                accentColor = Color(0xFFFBBF24)
+            )
+
+            UtilityButton(
+                text = "Share",
+                icon = Icons.Default.Share,
+                onClick = onShareGame,
+                modifier = Modifier.weight(1f),
+                testTag = "home_share_button",
+                accentColor = Color(0xFFA78BFA)
+            )
+        }
     }
 }
 
@@ -1195,67 +1667,65 @@ private fun UtilityButton(
 }
 
 // -----------------------------------------------------------------------------
-// 8. Docked / Pinned START GAME Button
+// 8. Docked / Pinned Action Buttons
 // -----------------------------------------------------------------------------
 
 @Composable
-private fun StartGameButton(
+private fun ResumeGameButton(
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(54.dp)
-            .shadow(12.dp, RoundedCornerShape(27.dp), ambientColor = Color(0xFF16A34A), spotColor = Color(0xFF22C55E))
-            .clip(RoundedCornerShape(27.dp))
+            .height(52.dp)
+            .shadow(12.dp, RoundedCornerShape(26.dp), ambientColor = Color(0xFF0284C7), spotColor = Color(0xFF38BDF8))
+            .clip(RoundedCornerShape(26.dp))
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        Color(0xFF22C55E), // Vivid green top highlight
-                        Color(0xFF16A34A), // Classic emerald green
-                        Color(0xFF15803D), // Deep green
-                        Color(0xFF14532D)  // Dark forest base
+                        Color(0xFF38BDF8),
+                        Color(0xFF0284C7),
+                        Color(0xFF0369A1),
+                        Color(0xFF075985)
                     )
                 )
             )
             .border(
-                width = 2.5.dp,
+                width = 2.dp,
                 brush = Brush.linearGradient(
                     listOf(
-                        Color(0xFFFFFBEB), // Pale golden glint
-                        Color(0xFFFDE047), // Brilliant gold
-                        Color(0xFFF59E0B), // Warm rich amber
-                        Color(0xFF78350F), // Bronze rim
-                        Color(0xFFFDE047)  // Brilliant gold
+                        Color(0xFFFFFBEB),
+                        Color(0xFFFDE047),
+                        Color(0xFF38BDF8),
+                        Color(0xFFFDE047)
                     )
                 ),
-                shape = RoundedCornerShape(27.dp)
+                shape = RoundedCornerShape(26.dp)
             )
             .clickable { onClick() }
-            .testTag("start_game_button"),
+            .testTag("resume_game_button"),
         contentAlignment = Alignment.Center
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            // Golden Play Arrow
             Icon(
-                imageVector = Icons.Default.PlayArrow,
+                imageVector = Icons.Default.PlayCircle,
                 contentDescription = null,
                 tint = Color(0xFFFFFBEB),
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(26.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "START GAME",
-                fontSize = 19.sp,
+                text = "RESUME GAME",
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 2.sp,
                 color = Color(0xFFFFFBEB),
                 style = TextStyle(
                     shadow = androidx.compose.ui.graphics.Shadow(
-                        color = Color(0xFF064E3B),
+                        color = Color(0xFF082F49),
                         offset = Offset(0f, 2f),
                         blurRadius = 4f
                     )
@@ -1264,3 +1734,92 @@ private fun StartGameButton(
         }
     }
 }
+
+@Composable
+private fun StartGameButton(
+    text: String = "START GAME",
+    isSecondary: Boolean = false,
+    onClick: () -> Unit
+) {
+    val height = if (isSecondary) 44.dp else 54.dp
+    val cornerRadius = if (isSecondary) 22.dp else 27.dp
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height)
+            .shadow(
+                if (isSecondary) 4.dp else 12.dp,
+                RoundedCornerShape(cornerRadius),
+                ambientColor = if (isSecondary) Color(0xFFB45309) else Color(0xFF16A34A),
+                spotColor = if (isSecondary) Color(0xFFF59E0B) else Color(0xFF22C55E)
+            )
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(
+                if (isSecondary) {
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF3D1E10), Color(0xFF261208), Color(0xFF180A04))
+                    )
+                } else {
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xFF22C55E), // Vivid green top highlight
+                            Color(0xFF16A34A), // Classic emerald green
+                            Color(0xFF15803D), // Deep green
+                            Color(0xFF14532D)  // Dark forest base
+                        )
+                    )
+                }
+            )
+            .border(
+                width = if (isSecondary) 1.5.dp else 2.5.dp,
+                brush = if (isSecondary) {
+                    Brush.linearGradient(
+                        listOf(Color(0xFFF59E0B), Color(0xFFB45309), Color(0xFF78350F))
+                    )
+                } else {
+                    Brush.linearGradient(
+                        listOf(
+                            Color(0xFFFFFBEB), // Pale golden glint
+                            Color(0xFFFDE047), // Brilliant gold
+                            Color(0xFFF59E0B), // Warm rich amber
+                            Color(0xFF78350F), // Bronze rim
+                            Color(0xFFFDE047)  // Brilliant gold
+                        )
+                    )
+                },
+                shape = RoundedCornerShape(cornerRadius)
+            )
+            .clickable { onClick() }
+            .testTag(if (isSecondary) "new_game_button" else "start_game_button"),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.PlayArrow,
+                contentDescription = null,
+                tint = if (isSecondary) Color(0xFFFDE047) else Color(0xFFFFFBEB),
+                modifier = Modifier.size(if (isSecondary) 22.dp else 28.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = text,
+                fontSize = if (isSecondary) 15.sp else 19.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = if (isSecondary) 1.sp else 2.sp,
+                color = if (isSecondary) Color(0xFFFDE047) else Color(0xFFFFFBEB),
+                style = TextStyle(
+                    shadow = androidx.compose.ui.graphics.Shadow(
+                        color = if (isSecondary) Color(0xFF451A03) else Color(0xFF064E3B),
+                        offset = Offset(0f, 2f),
+                        blurRadius = 4f
+                    )
+                )
+            )
+        }
+    }
+}
+

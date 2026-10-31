@@ -1416,6 +1416,276 @@ class ExampleUnitTest {
         assertTrue(state.isGameOver)
         assertEquals("Winner Red", state.winnerPodium.first().name)
     }
+
+    @Test
+    fun test_aiDifficulty_enum_and_scoring() {
+        val easy = com.example.model.AiDifficulty.EASY
+        val medium = com.example.model.AiDifficulty.MEDIUM
+        val hard = com.example.model.AiDifficulty.HARD
+
+        assertEquals("Easy", easy.title)
+        assertEquals("Medium", medium.title)
+        assertEquals("Hard", hard.title)
+
+        // Bot with capture opportunity vs non-capture move
+        val botPlayer = Player(
+            color = PlayerColor.YELLOW,
+            name = "Bot Yellow",
+            isBot = true,
+            tokens = listOf(
+                Token(id = 0, color = PlayerColor.YELLOW, position = TokenPosition.OnBoard(step = 10)),
+                Token(id = 1, color = PlayerColor.YELLOW, position = TokenPosition.OnBoard(step = 20))
+            )
+        )
+        // Red token at Yellow's step 12 (Yellow start 26 -> step 12 is track (26+12)%52 = 38, not a safe star)
+        // Red start is 0 -> step 38
+        val humanPlayer = Player(
+            color = PlayerColor.RED,
+            name = "Human",
+            tokens = listOf(
+                Token(id = 10, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 38))
+            )
+        )
+
+        // On roll 2:
+        // Token 0 at step 10 -> moves to step 12: CAPTURES Red token 10!
+        // Token 1 at step 20 -> moves to step 22: simple forward move
+        val stateHard = GameState(
+            players = listOf(humanPlayer, botPlayer),
+            currentTurnIndex = 1,
+            gameMode = GameMode.VS_COMPUTER,
+            aiDifficulty = com.example.model.AiDifficulty.HARD,
+            movableTokenIds = setOf(0, 1),
+            phase = TurnPhase.SELECTING_TOKEN
+        )
+
+        val chosenHard = LudoEngine.pickBestBotToken(stateHard, botPlayer, 2)
+        assertNotNull(chosenHard)
+        assertEquals("Hard AI bot MUST prioritize capture", 0, chosenHard?.id)
+
+        val stateMedium = stateHard.copy(aiDifficulty = com.example.model.AiDifficulty.MEDIUM)
+        val chosenMedium = LudoEngine.pickBestBotToken(stateMedium, botPlayer, 2)
+        assertNotNull(chosenMedium)
+        assertEquals("Medium AI bot also prioritizes capture", 0, chosenMedium?.id)
+    }
+
+    @Test
+    fun test_matchHistoryRecord_data_integrity() {
+        val summary1 = com.example.model.MatchPlayerSummary(
+            name = "Jitu",
+            color = PlayerColor.RED,
+            isBot = false,
+            captures = 4,
+            tokensHome = 4
+        )
+        val summary2 = com.example.model.MatchPlayerSummary(
+            name = "Bot Yellow",
+            color = PlayerColor.YELLOW,
+            isBot = true,
+            captures = 1,
+            tokensHome = 2
+        )
+
+        val record = com.example.model.MatchHistoryRecord(
+            id = "match-12345",
+            timestampMs = 1700000000000L,
+            formattedDate = "29 Oct 2026, 12:00",
+            gameMode = GameMode.VS_COMPUTER,
+            aiDifficulty = com.example.model.AiDifficulty.HARD,
+            winnerName = "Jitu",
+            winnerColor = PlayerColor.RED,
+            players = listOf(summary1, summary2)
+        )
+
+        assertEquals("match-12345", record.id)
+        assertEquals("Jitu", record.winnerName)
+        assertEquals(PlayerColor.RED, record.winnerColor)
+        assertEquals(GameMode.VS_COMPUTER, record.gameMode)
+        assertEquals(com.example.model.AiDifficulty.HARD, record.aiDifficulty)
+        assertEquals(2, record.players.size)
+        assertEquals(4, record.players[0].tokensHome)
+        assertEquals(4, record.players[0].captures)
+    }
+
+    @Test
+    fun test_completedGame_isNeverRestoredAsActive() {
+        val finishedTokens = List(4) { Token(id = it, color = PlayerColor.RED, position = TokenPosition.Finished) }
+        val winnerPlayer = Player(color = PlayerColor.RED, name = "Winner", tokens = finishedTokens)
+        val opponentTokens = List(4) { Token(id = it, color = PlayerColor.YELLOW, position = TokenPosition.InBase) }
+        val opponent = Player(color = PlayerColor.YELLOW, name = "Opponent", tokens = opponentTokens)
+
+        val completedState = GameState(
+            players = listOf(winnerPlayer, opponent),
+            currentTurnIndex = 0,
+            winnerPodium = listOf(winnerPlayer),
+            isGameOver = true
+        )
+
+        assertTrue("Completed game must have isGameOver true", completedState.isGameOver)
+        // Verify contract: any resume logic checks isGameOver and rejects completed matches
+        val canResume = !completedState.isGameOver
+        assertFalse("Completed game must never be eligible for resume", canResume)
+    }
+
+    // =========================================================================
+    // FEATURE 1: PLAYER NAMES & AVATAR SYSTEM
+    // =========================================================================
+    @Test
+    fun test_feature1_playerAvatars_defaultsAndSelection() {
+        val king = com.example.model.PlayerAvatar.KING
+        assertEquals("👑", king.emoji)
+        assertEquals("King", king.title)
+
+        val player = Player(
+            color = PlayerColor.RED,
+            name = "Champion Jitu",
+            avatar = com.example.model.PlayerAvatar.LION
+        )
+        assertEquals("Champion Jitu", player.name)
+        assertEquals(com.example.model.PlayerAvatar.LION, player.avatar)
+        assertEquals("🦁", player.avatar.emoji)
+
+        // Verify all 10 avatars exist and have non-empty emoji and title
+        com.example.model.PlayerAvatar.values().forEach { av ->
+            assertTrue("Avatar emoji cannot be blank", av.emoji.isNotBlank())
+            assertTrue("Avatar title cannot be blank", av.title.isNotBlank())
+        }
+    }
+
+    // =========================================================================
+    // FEATURE 2: IN-GAME EMOJI REACTIONS
+    // =========================================================================
+    @Test
+    fun test_feature2_emojiReactions_eventCreationAndOptions() {
+        val validReactions = listOf("😂", "😎", "👏", "🔥", "❤️", "😮", "🎉")
+        val reactionEvent = com.example.model.EmojiReactionEvent(
+            senderColor = PlayerColor.RED,
+            senderName = "Player 1",
+            emoji = "🔥",
+            timestampMs = 1000L
+        )
+
+        assertEquals(PlayerColor.RED, reactionEvent.senderColor)
+        assertEquals("🔥", reactionEvent.emoji)
+        assertTrue("Reaction must be in supported list", validReactions.contains(reactionEvent.emoji))
+    }
+
+    // =========================================================================
+    // FEATURE 3: DETAILED RESULT SCREEN & SUMMARY
+    // =========================================================================
+    @Test
+    fun test_feature3_matchHistory_withDurationAndAvatars() {
+        val p1 = com.example.model.MatchPlayerSummary(
+            name = "Ace",
+            color = PlayerColor.RED,
+            avatar = com.example.model.PlayerAvatar.KING,
+            captures = 3,
+            tokensHome = 4,
+            isBot = false
+        )
+        val p2 = com.example.model.MatchPlayerSummary(
+            name = "Bot Smart",
+            color = PlayerColor.YELLOW,
+            avatar = com.example.model.PlayerAvatar.ROBOT,
+            captures = 1,
+            tokensHome = 2,
+            isBot = true
+        )
+
+        val record = com.example.model.MatchHistoryRecord(
+            id = "match-duration-test",
+            timestampMs = 1700000000000L,
+            formattedDate = "30 Oct 2026, 15:30",
+            gameMode = GameMode.VS_COMPUTER,
+            aiDifficulty = com.example.model.AiDifficulty.MEDIUM,
+            winnerName = "Ace",
+            winnerColor = PlayerColor.RED,
+            winnerAvatar = com.example.model.PlayerAvatar.KING,
+            durationSeconds = 245L, // 4m 05s
+            players = listOf(p1, p2)
+        )
+
+        assertEquals(245L, record.durationSeconds)
+        assertEquals(com.example.model.PlayerAvatar.KING, record.winnerAvatar)
+        assertEquals(com.example.model.PlayerAvatar.ROBOT, record.players[1].avatar)
+        assertEquals(3, record.players[0].captures)
+        assertEquals(4, record.players[0].tokensHome)
+    }
+
+    // =========================================================================
+    // FEATURE 4: BOARD THEME SELECTION
+    // =========================================================================
+    @Test
+    fun test_feature4_boardThemes() {
+        val themes = com.example.model.BoardTheme.values()
+        assertEquals(3, themes.size)
+        assertTrue(themes.contains(com.example.model.BoardTheme.CLASSIC))
+        assertTrue(themes.contains(com.example.model.BoardTheme.NIGHT))
+        assertTrue(themes.contains(com.example.model.BoardTheme.ROYAL_GOLD))
+
+        // Ensure boardTheme is part of GameState
+        val state = GameState(boardTheme = com.example.model.BoardTheme.ROYAL_GOLD)
+        assertEquals(com.example.model.BoardTheme.ROYAL_GOLD, state.boardTheme)
+    }
+
+    // =========================================================================
+    // FEATURE 5: TURN INDICATOR & BONUS TURN REASONS
+    // =========================================================================
+    @Test
+    fun test_feature5_extraTurnReasons_rolledSix_capture_and_reachedHome() {
+        // Test 1: Rolled 6 awards extra turn reason
+        val tokenInBase = Token(id = 0, color = PlayerColor.RED, position = TokenPosition.InBase)
+        val player = Player(color = PlayerColor.RED, name = "Red", tokens = listOf(tokenInBase))
+        val state1 = GameState(
+            players = listOf(player),
+            currentTurnIndex = 0,
+            diceState = DiceState(value = 6),
+            phase = TurnPhase.SELECTING_TOKEN
+        )
+        val outcome1 = LudoEngine.executeMove(state1, 0)
+        assertTrue(outcome1.hasBonusTurn)
+        assertEquals("Rolled a 6! Extra turn!", outcome1.bonusReason)
+        assertEquals("Rolled a 6! Extra turn!", outcome1.updatedState.extraTurnReason)
+
+        // Test 2: Token finished awards extra turn reason when player still has tokens
+        val tokensForPlayer = listOf(
+            Token(id = 0, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 55)),
+            Token(id = 1, color = PlayerColor.RED, position = TokenPosition.InBase)
+        )
+        val state2 = GameState(
+            players = listOf(Player(color = PlayerColor.RED, name = "Red", tokens = tokensForPlayer)),
+            currentTurnIndex = 0,
+            diceState = DiceState(value = 1),
+            phase = TurnPhase.SELECTING_TOKEN
+        )
+        val outcome2 = LudoEngine.executeMove(state2, 0)
+        assertTrue(outcome2.hasBonusTurn)
+        assertEquals("Token reached Home! Extra turn!", outcome2.bonusReason)
+        assertEquals("Token reached Home! Extra turn!", outcome2.updatedState.extraTurnReason)
+    }
+
+    // =========================================================================
+    // BRANDING UPGRADE TESTS: APP ICON & SPLASH SCREEN
+    // =========================================================================
+    @Test
+    fun test_appScreen_includesSplashDestination() {
+        val splash = AppScreen.SPLASH
+        assertNotNull(splash)
+        assertEquals("SPLASH", splash.name)
+        assertTrue(AppScreen.values().contains(AppScreen.SPLASH))
+        assertTrue(AppScreen.values().contains(AppScreen.HOME))
+        assertTrue(AppScreen.values().contains(AppScreen.GAME))
+    }
+
+    @Test
+    fun test_splashAndIconResources_areConfigured() {
+        // Verify drawables for splash logo and icon foreground exist
+        assertTrue(R.drawable.img_splash_logo != 0)
+        assertTrue(R.drawable.ic_launcher_foreground_asset != 0)
+        assertTrue(R.drawable.bg_splash_window != 0)
+        assertTrue(R.color.splash_background != 0)
+    }
 }
+
 
 

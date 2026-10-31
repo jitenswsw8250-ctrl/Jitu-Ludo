@@ -74,7 +74,7 @@ fun LudoBoardView(
     val currentGameState by rememberUpdatedState(gameState)
     val currentOnTokenClicked by rememberUpdatedState(onTokenClicked)
 
-    // Luxury 3D Golden Bevel Frame inspired by reference artwork
+    // Luxury 3D Bevel Frame themed according to selected BoardTheme
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -84,20 +84,10 @@ fun LudoBoardView(
         shape = RoundedCornerShape(22.dp),
         border = androidx.compose.foundation.BorderStroke(
             width = 4.dp,
-            brush = Brush.linearGradient(
-                listOf(
-                    Color(0xFFFFFBEB), // Glistening light gold highlight
-                    Color(0xFFFDE047), // Radiant gold
-                    Color(0xFFF59E0B), // Warm rich amber
-                    Color(0xFFD97706), // Deep burnished gold
-                    Color(0xFF78350F), // Rich dark bronze shadow
-                    Color(0xFFFBBF24), // Vibrant gold highlight
-                    Color(0xFFFFFBEB)  // Glistening light gold
-                )
-            )
+            brush = Brush.linearGradient(gameState.boardTheme.frameBorderBrushColors)
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF150A05))
+        colors = CardDefaults.cardColors(containerColor = gameState.boardTheme.outerBackground)
     ) {
         BoxWithConstraints(modifier = Modifier.aspectRatio(1f)) {
             val boardPixelSize = constraints.maxWidth.toFloat()
@@ -210,7 +200,7 @@ fun LudoBoardView(
                 drawHomeTriangles(cellSize)
 
                 // 3. Track Cells, Start Arrows, and Safe Stars
-                drawTrackCells(cellSize)
+                drawTrackCells(cellSize, gameState.boardTheme)
 
                 // 4. Glossy 3D Tokens
                 drawTokens(gameState, cellSize, pulseScale)
@@ -272,6 +262,7 @@ private fun DrawScope.drawBoardBackground(cellSize: Float, players: List<Player>
         cellSize = cellSize,
         slotOffsets = LudoBoardMap.BASE_SLOT_POINTS[PlayerColor.GREEN]!!.map { Offset(it.x * cellSize, it.y * cellSize) },
         playerName = greenPlayer?.name,
+        playerAvatar = greenPlayer?.avatar?.emoji,
         winChanceDisplay = greenPlayer?.formattedWinChance
     )
 
@@ -303,6 +294,7 @@ private fun DrawScope.drawBoardBackground(cellSize: Float, players: List<Player>
         cellSize = cellSize,
         slotOffsets = LudoBoardMap.BASE_SLOT_POINTS[PlayerColor.YELLOW]!!.map { Offset(it.x * cellSize, it.y * cellSize) },
         playerName = yellowPlayer?.name,
+        playerAvatar = yellowPlayer?.avatar?.emoji,
         winChanceDisplay = yellowPlayer?.formattedWinChance
     )
 
@@ -334,6 +326,7 @@ private fun DrawScope.drawBoardBackground(cellSize: Float, players: List<Player>
         cellSize = cellSize,
         slotOffsets = LudoBoardMap.BASE_SLOT_POINTS[PlayerColor.BLUE]!!.map { Offset(it.x * cellSize, it.y * cellSize) },
         playerName = bluePlayer?.name,
+        playerAvatar = bluePlayer?.avatar?.emoji,
         winChanceDisplay = bluePlayer?.formattedWinChance
     )
 
@@ -365,6 +358,7 @@ private fun DrawScope.drawBoardBackground(cellSize: Float, players: List<Player>
         cellSize = cellSize,
         slotOffsets = LudoBoardMap.BASE_SLOT_POINTS[PlayerColor.RED]!!.map { Offset(it.x * cellSize, it.y * cellSize) },
         playerName = redPlayer?.name,
+        playerAvatar = redPlayer?.avatar?.emoji,
         winChanceDisplay = redPlayer?.formattedWinChance
     )
 }
@@ -379,6 +373,7 @@ private fun DrawScope.drawYardBasePlate(
     cellSize: Float,
     slotOffsets: List<Offset>,
     playerName: String? = null,
+    playerAvatar: String? = null,
     winChanceDisplay: String? = null
 ) {
     val cornerRadius = CornerRadius(cellSize * 0.70f, cellSize * 0.70f)
@@ -512,8 +507,9 @@ private fun DrawScope.drawYardBasePlate(
             textAlign = Paint.Align.CENTER
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
+        val displayName = if (!playerAvatar.isNullOrEmpty()) "$playerAvatar ${playerName.take(8)}" else playerName.take(11)
         drawContext.canvas.nativeCanvas.drawText(
-            playerName.take(11),
+            displayName,
             centerX,
             nameBadgeY + nameBadgeHeight * 0.72f,
             namePaint
@@ -662,8 +658,8 @@ private fun DrawScope.drawTriangleWithGradient(p1: Offset, p2: Offset, p3: Offse
 // Track Cells, Start Arrows, and Safe Stars (Sharp, High-Contrast Polished Path)
 // -----------------------------------------------------------------------------
 
-private fun DrawScope.drawTrackCells(cellSize: Float) {
-    val trackBorderColor = Color(0xFF475569) // Crisp slate-600 grid border
+private fun DrawScope.drawTrackCells(cellSize: Float, boardTheme: com.example.model.BoardTheme) {
+    val trackBorderColor = boardTheme.trackCellBorder
     val trackStrokeWidth = cellSize * 0.055f
 
     // 1. Draw all 52 outer track cells
@@ -672,14 +668,14 @@ private fun DrawScope.drawTrackCells(cellSize: Float) {
         val rectSize = Size(cellSize, cellSize)
         val center = Offset(rectTopLeft.x + cellSize / 2f, rectTopLeft.y + cellSize / 2f)
 
-        // Starting squares get exact matching colored path fills, safe star squares soft violet, others clean crisp off-white
+        // Starting squares get exact matching colored path fills, safe star squares soft violet, others clean crisp off-white or themed fill
         val cellColor = when (index) {
             0 -> Color(0xFFDC2626)  // Red start (6, 13) matching red home-lane path
             13 -> Color(0xFF059669) // Green start (1, 6) matching green home-lane path
             26 -> Color(0xFFD97706) // Yellow start (8, 1) matching yellow home-lane path
             39 -> Color(0xFF2563EB) // Blue start (13, 8) matching blue home-lane path
-            8, 21, 34, 47 -> Color(0xFFEDE9FE) // Star safe cells
-            else -> Color(0xFFF8FAFC)
+            8, 21, 34, 47 -> if (boardTheme == com.example.model.BoardTheme.NIGHT) Color(0xFF1E1B4B) else Color(0xFFEDE9FE)
+            else -> boardTheme.trackCellFill
         }
 
         // Cell background fill
@@ -688,9 +684,20 @@ private fun DrawScope.drawTrackCells(cellSize: Float) {
         // Prominent circular movement spaces / stepping stone rings inside regular white cells
         if (index !in listOf(0, 13, 26, 39, 8, 21, 34, 47)) {
             val waypointRadius = cellSize * 0.35f
+            val ringColor = when (boardTheme) {
+                com.example.model.BoardTheme.NIGHT -> Color(0xFF475569)
+                com.example.model.BoardTheme.ROYAL_GOLD -> Color(0xFFB45309)
+                else -> Color(0xFF94A3B8)
+            }
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9), Color(0xFFE2E8F0)),
+                    colors = if (boardTheme == com.example.model.BoardTheme.NIGHT) {
+                        listOf(Color(0xFF334155), Color(0xFF1E293B), Color(0xFF0F172A))
+                    } else if (boardTheme == com.example.model.BoardTheme.ROYAL_GOLD) {
+                        listOf(Color(0xFFFFFBEB), Color(0xFFFEF3C7), Color(0xFFFDE68A))
+                    } else {
+                        listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9), Color(0xFFE2E8F0))
+                    },
                     center = center,
                     radius = waypointRadius
                 ),
@@ -698,7 +705,7 @@ private fun DrawScope.drawTrackCells(cellSize: Float) {
                 center = center
             )
             drawCircle(
-                color = Color(0xFF94A3B8), // Prominent stepping stone ring
+                color = ringColor,
                 radius = waypointRadius,
                 center = center,
                 style = Stroke(width = cellSize * 0.045f)

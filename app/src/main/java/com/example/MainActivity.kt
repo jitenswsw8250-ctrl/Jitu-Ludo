@@ -17,15 +17,18 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.model.PlayerColor
 import com.example.ui.LudoViewModel
 import com.example.ui.screens.GameScreen
+import com.example.ui.screens.HistoryDialog
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.RulesDialog
 import com.example.ui.screens.SettingsDialog
 import com.example.ui.screens.SkinsDialog
+import com.example.ui.screens.SplashScreen
 import com.example.ui.screens.StatisticsDialog
 import com.example.ui.screens.WebViewScreen
 import com.example.ui.theme.MyApplicationTheme
 
 enum class AppScreen {
+    SPLASH,
     HOME,
     GAME,
     WEB_VIEW
@@ -51,34 +54,57 @@ fun LudoAppRoot(
     viewModel: LudoViewModel,
     modifier: Modifier = Modifier
 ) {
-    var currentScreen by remember { mutableStateOf(AppScreen.HOME) }
+    var currentScreen by remember { mutableStateOf(AppScreen.SPLASH) }
     var showRulesDialog by remember { mutableStateOf(false) }
     var showStatsDialog by remember { mutableStateOf(false) }
+    var showHistoryDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showSkinsDialog by remember { mutableStateOf(false) }
 
     val gameState by viewModel.gameState.collectAsState()
     val playerStats by viewModel.playerStats.collectAsState()
+    val matchHistory by viewModel.matchHistory.collectAsState()
+    val hasSavedGame by viewModel.hasSavedGame.collectAsState()
     val context = LocalContext.current
 
     when (currentScreen) {
+        AppScreen.SPLASH -> {
+            SplashScreen(
+                onSplashFinished = { currentScreen = AppScreen.HOME },
+                modifier = modifier
+            )
+        }
+
         AppScreen.HOME -> {
             HomeScreen(
                 soundEnabled = gameState.soundEnabled,
                 hapticsEnabled = gameState.hapticsEnabled,
                 onToggleSound = { viewModel.toggleSound() },
                 onToggleHaptics = { viewModel.toggleHaptics() },
-                onStartGame = { mode, count, color, names ->
+                hasSavedGame = hasSavedGame,
+                onResumeGame = {
+                    if (viewModel.resumeSavedGame()) {
+                        currentScreen = AppScreen.GAME
+                    }
+                },
+                selectedDifficulty = gameState.aiDifficulty,
+                onDifficultySelected = { viewModel.setAiDifficulty(it) },
+                boardTheme = gameState.boardTheme,
+                onSetBoardTheme = { viewModel.setBoardTheme(it) },
+                onStartGame = { mode, count, color, names, avatars ->
                     viewModel.startNewGame(
                         mode = mode,
                         playerCount = count,
                         humanColor = color,
-                        customNames = names
+                        customNames = names,
+                        customAvatars = avatars,
+                        difficulty = gameState.aiDifficulty
                     )
                     currentScreen = AppScreen.GAME
                 },
                 onOpenRules = { showRulesDialog = true },
                 onOpenStats = { showStatsDialog = true },
+                onOpenHistory = { showHistoryDialog = true },
                 onOpenWebView = { currentScreen = AppScreen.WEB_VIEW },
                 onShareGame = {
                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -108,7 +134,9 @@ fun LudoAppRoot(
                         mode = gameState.gameMode,
                         playerCount = gameState.players.size,
                         humanColor = p1?.color ?: PlayerColor.RED,
-                        customNames = gameState.players.associate { it.color to it.name }
+                        customNames = gameState.players.associate { it.color to it.name },
+                        customAvatars = gameState.players.associate { it.color to it.avatar },
+                        difficulty = gameState.aiDifficulty
                     )
                 },
                 onNavigateHome = { currentScreen = AppScreen.HOME },
@@ -117,6 +145,7 @@ fun LudoAppRoot(
                 onSetAnimationSpeed = { viewModel.setAnimationSpeed(it) },
                 onSetSkin = { viewModel.setSkin(it) },
                 onOpenStats = { showStatsDialog = true },
+                onSendEmojiReaction = { viewModel.sendEmojiReaction(it) },
                 modifier = modifier
             )
         }
@@ -141,15 +170,27 @@ fun LudoAppRoot(
         )
     }
 
+    if (showHistoryDialog) {
+        HistoryDialog(
+            historyList = matchHistory,
+            onClearHistory = { viewModel.clearMatchHistory() },
+            onDismiss = { showHistoryDialog = false }
+        )
+    }
+
     if (showSettingsDialog) {
         SettingsDialog(
             soundEnabled = gameState.soundEnabled,
             hapticsEnabled = gameState.hapticsEnabled,
             animationSpeed = gameState.animationSpeed,
             currentSkin = gameState.currentSkin,
+            aiDifficulty = gameState.aiDifficulty,
+            boardTheme = gameState.boardTheme,
             onToggleSound = { viewModel.toggleSound() },
             onToggleHaptics = { viewModel.toggleHaptics() },
             onSetAnimationSpeed = { viewModel.setAnimationSpeed(it) },
+            onSetAiDifficulty = { viewModel.setAiDifficulty(it) },
+            onSetBoardTheme = { viewModel.setBoardTheme(it) },
             onOpenSkins = {
                 showSettingsDialog = false
                 showSkinsDialog = true

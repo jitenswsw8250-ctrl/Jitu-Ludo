@@ -3,14 +3,26 @@ package com.example.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.GameHistoryRepository
+import com.example.data.GameStateRepository
 import com.example.data.PlayerStatsRecord
+import com.example.data.SettingsRepository
 import com.example.data.StatsRepository
 import com.example.logic.LudoEngine
+import com.example.model.AiDifficulty
+import com.example.model.AnimationSpeed
+import com.example.model.BoardTheme
 import com.example.model.DiceState
+import com.example.model.EmojiReactionEvent
 import com.example.model.GameMode
+import com.example.model.GameSkin
 import com.example.model.GameState
+import com.example.model.MatchHistoryRecord
+import com.example.model.MatchPlayerSummary
 import com.example.model.Player
+import com.example.model.PlayerAvatar
 import com.example.model.PlayerColor
+import com.example.model.TokenPosition
 import com.example.model.TurnPhase
 import com.example.sound.SoundManager
 import kotlinx.coroutines.Job
@@ -20,24 +32,28 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
 import kotlin.random.Random
-
-import com.example.data.SettingsRepository
-import com.example.model.AnimationSpeed
-import com.example.model.GameSkin
 
 class LudoViewModel(application: Application) : AndroidViewModel(application) {
 
     private val soundManager = SoundManager(application)
     private val statsRepository = StatsRepository(application)
     private val settingsRepository = SettingsRepository(application)
+    private val gameStateRepository = GameStateRepository(application)
+    private val gameHistoryRepository = GameHistoryRepository(application)
 
     private val _gameState = MutableStateFlow(
         GameState(
-            soundEnabled = SettingsRepository(application).isSoundEnabled(),
-            hapticsEnabled = SettingsRepository(application).isHapticsEnabled(),
-            animationSpeed = SettingsRepository(application).getAnimationSpeed(),
-            currentSkin = SettingsRepository(application).getSelectedSkin()
+            soundEnabled = settingsRepository.isSoundEnabled(),
+            hapticsEnabled = settingsRepository.isHapticsEnabled(),
+            animationSpeed = settingsRepository.getAnimationSpeed(),
+            currentSkin = settingsRepository.getSelectedSkin(),
+            boardTheme = settingsRepository.getBoardTheme(),
+            aiDifficulty = settingsRepository.getAiDifficulty()
         )
     )
     val gameState: StateFlow<GameState> = _gameState.asStateFlow()
@@ -45,9 +61,17 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
     private val _playerStats = MutableStateFlow<List<PlayerStatsRecord>>(emptyList())
     val playerStats: StateFlow<List<PlayerStatsRecord>> = _playerStats.asStateFlow()
 
+    private val _matchHistory = MutableStateFlow<List<MatchHistoryRecord>>(emptyList())
+    val matchHistory: StateFlow<List<MatchHistoryRecord>> = _matchHistory.asStateFlow()
+
+    private val _hasSavedGame = MutableStateFlow(false)
+    val hasSavedGame: StateFlow<Boolean> = _hasSavedGame.asStateFlow()
+
     private var botJob: Job? = null
     private var autoMoveJob: Job? = null
     private var captureDismissJob: Job? = null
+    private var moveJob: Job? = null
+    private var reactionDismissJob: Job? = null
 
     @Volatile
     private var isActionLocked = false
@@ -56,18 +80,42 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
     private var hasRecordedGameCompletion = false
 
     init {
-        // Load persistent stats
+        // Load persistent stats and match history
         _playerStats.value = statsRepository.getAllStats()
+        _matchHistory.value = gameHistoryRepository.getHistory()
+        _hasSavedGame.value = gameStateRepository.hasActiveGame()
 
-        // Initialize with default 2-player local game
+        // Check if unfinished match exists
+        if (gameStateRepository.hasActiveGame()) {
+            val loaded = gameStateRepository.loadActiveGame()
+            if (loaded != null && !loaded.isGameOver) {
+                _gameState.value = loaded
+                _hasSavedGame.value = true
+            } else {
+                gameStateRepository.clearActiveGame()
+                _hasSavedGame.value = false
+                initDefaultGame()
+            }
+        } else {
+            initDefaultGame()
+        }
+    }
+
+    private fun initDefaultGame() {
         startNewGame(
             mode = GameMode.LOCAL_MULTIPLAYER,
             playerCount = 2,
             humanColor = PlayerColor.RED,
             customNames = mapOf(
-                PlayerColor.RED to "Player 1",
-                PlayerColor.YELLOW to "Player 2"
-            )
+                PlayerColor.RED to settingsRepository.getPlayerName(PlayerColor.RED, "Player 1"),
+                PlayerColor.YELLOW to settingsRepository.getPlayerName(PlayerColor.YELLOW, "Player 2")
+            ),
+            customAvatars = mapOf(
+                PlayerColor.RED to settingsRepository.getPlayerAvatar(PlayerColor.RED),
+                PlayerColor.YELLOW to settingsRepository.getPlayerAvatar(PlayerColor.YELLOW)
+            ),
+            difficulty = settingsRepository.getAiDifficulty(),
+            saveImmediately = false
         )
     }
 
@@ -75,16 +123,19 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         mode: GameMode,
         playerCount: Int,
         humanColor: PlayerColor = PlayerColor.RED,
-        customNames: Map<PlayerColor, String> = emptyMap()
+        customNames: Map<PlayerColor, String> = emptyMap(),
+        customAvatars: Map<PlayerColor, PlayerAvatar> = emptyMap(),
+        difficulty: AiDifficulty = settingsRepository.getAiDifficulty(),
+        saveImmediately: Boolean = true
     ) {
         botJob?.cancel()
         autoMoveJob?.cancel()
         captureDismissJob?.cancel()
         moveJob?.cancel()
+        reactionDismissJob?.cancel()
         isActionLocked = false
         hasRecordedGameCompletion = false
 
-        // Correctly assemble players and colors for each mode
         val selectedColors = if (mode == GameMode.VS_COMPUTER) {
             when (playerCount) {
                 2 -> {
@@ -108,7 +159,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
             }
         } else {
             when (playerCount) {
-                2 -> listOf(PlayerColor.RED, PlayerColor.YELLOW) // Classic opposite colors
+                2 -> listOf(PlayerColor.RED, PlayerColor.YELLOW)
                 3 -> listOf(PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW)
                 else -> listOf(PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE)
             }
@@ -116,41 +167,86 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
 
         val players = selectedColors.map { color ->
             val isBot = (mode == GameMode.VS_COMPUTER && color != humanColor)
-            val defaultName = if (isBot) "Bot ${color.title}" else "${color.title} Player"
-            val name = customNames[color] ?: defaultName
+            val fallbackDefault = if (isBot) "Bot ${color.title}" else "${color.title} Player"
+            val savedName = settingsRepository.getPlayerName(color, fallbackDefault)
+            val name = customNames[color] ?: savedName
+
+            // Save player name preference if provided
+            customNames[color]?.let { settingsRepository.setPlayerName(color, it) }
+
+            val avatar = customAvatars[color] ?: settingsRepository.getPlayerAvatar(color)
+            customAvatars[color]?.let { settingsRepository.setPlayerAvatar(color, it) }
+
             Player(
                 color = color,
                 name = name,
-                isBot = isBot
+                isBot = isBot,
+                avatar = avatar
             )
         }
 
         val initialPlayers = LudoEngine.calculateLiveWinChances(players)
-
-        // Starting player index is 0 (human player in Vs Computer, or first player in Pass & Play)
         val startingPlayerIndex = 0
         val startingPlayer = initialPlayers[startingPlayerIndex]
 
-        _gameState.update {
-            GameState(
-                players = initialPlayers,
-                currentTurnIndex = startingPlayerIndex,
-                diceState = DiceState(value = 1, isRolling = false, consecutiveSixes = 0),
-                phase = TurnPhase.WAITING_FOR_ROLL,
-                gameMode = mode,
-                statusMessage = "${startingPlayer.name}'s turn. Roll the dice!",
-                movableTokenIds = emptySet(),
-                winnerPodium = emptyList(),
-                isGameOver = false,
-                soundEnabled = it.soundEnabled,
-                hapticsEnabled = it.hapticsEnabled,
-                autoRollBots = it.autoRollBots,
-                currentSkin = it.currentSkin,
-                animationSpeed = it.animationSpeed
-            )
+        val newState = GameState(
+            matchId = UUID.randomUUID().toString(),
+            players = initialPlayers,
+            currentTurnIndex = startingPlayerIndex,
+            diceState = DiceState(value = 1, isRolling = false, consecutiveSixes = 0),
+            phase = TurnPhase.WAITING_FOR_ROLL,
+            gameMode = mode,
+            aiDifficulty = difficulty,
+            statusMessage = "${startingPlayer.name}'s turn. Roll the dice!",
+            movableTokenIds = emptySet(),
+            winnerPodium = emptyList(),
+            isGameOver = false,
+            soundEnabled = settingsRepository.isSoundEnabled(),
+            hapticsEnabled = settingsRepository.isHapticsEnabled(),
+            autoRollBots = true,
+            currentSkin = settingsRepository.getSelectedSkin(),
+            boardTheme = settingsRepository.getBoardTheme(),
+            animationSpeed = settingsRepository.getAnimationSpeed(),
+            matchStartTimeMs = System.currentTimeMillis(),
+            matchDurationSeconds = 0L,
+            activeReaction = null,
+            extraTurnReason = null
+        )
+
+        _gameState.value = newState
+
+        if (saveImmediately) {
+            gameStateRepository.saveActiveGame(newState)
+            _hasSavedGame.value = true
         }
 
         checkBotTurn()
+    }
+
+    fun resumeSavedGame(): Boolean {
+        val loaded = gameStateRepository.loadActiveGame() ?: return false
+        if (loaded.isGameOver) {
+            gameStateRepository.clearActiveGame()
+            _hasSavedGame.value = false
+            return false
+        }
+
+        botJob?.cancel()
+        autoMoveJob?.cancel()
+        captureDismissJob?.cancel()
+        moveJob?.cancel()
+        isActionLocked = false
+        hasRecordedGameCompletion = false
+
+        _gameState.value = loaded
+        _hasSavedGame.value = true
+        checkBotTurn(delayMs = 600)
+        return true
+    }
+
+    fun discardSavedGame() {
+        gameStateRepository.clearActiveGame()
+        _hasSavedGame.value = false
     }
 
     fun rollDice() {
@@ -169,7 +265,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 soundManager.playDiceRoll(state.soundEnabled, state.hapticsEnabled)
 
-                // Rapid tumble animation (snappy, smooth and non-blocking)
+                // Rapid tumble animation
                 val curPlayerConsecutive = _gameState.value.currentPlayer?.consecutiveSixes
                     ?: _gameState.value.diceState.consecutiveSixes
                 val maxTumble = if (curPlayerConsecutive >= 2) 6 else 7
@@ -185,12 +281,18 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
                 val updatedState = LudoEngine.rollDice(_gameState.value, forcedRoll = finalRoll)
                 _gameState.value = updatedState
 
+                // Auto-save game state after dice roll
+                if (!updatedState.isGameOver) {
+                    gameStateRepository.saveActiveGame(updatedState)
+                    _hasSavedGame.value = true
+                }
+
                 val currentPlayer = updatedState.currentPlayer
                 if (updatedState.phase == TurnPhase.SELECTING_TOKEN && currentPlayer != null) {
                     if (currentPlayer.isBot) {
                         scheduleBotMove(delayMs = 420)
                     } else {
-                        // Feature 2: If exactly one token can legally move, auto-move smoothly after 420ms
+                        // If exactly one token can legally move, auto-move smoothly after 420ms
                         val movable = updatedState.movableTokenIds
                         if (movable.size == 1) {
                             val singleTokenId = movable.first()
@@ -217,9 +319,14 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
                         it.copy(
                             currentTurnIndex = nextTurnIndex,
                             phase = TurnPhase.WAITING_FOR_ROLL,
-                            statusMessage = "${nextPlayer.name}'s turn. Roll the dice!"
+                            statusMessage = "${nextPlayer.name}'s turn. Roll the dice!",
+                            extraTurnReason = null
                         )
                     }
+                    // Auto-save transitioned state
+                    gameStateRepository.saveActiveGame(_gameState.value)
+                    _hasSavedGame.value = true
+
                     soundManager.playTurnChange(_gameState.value.soundEnabled)
                     checkBotTurn(delayMs = 450)
                 }
@@ -229,17 +336,13 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private var moveJob: Job? = null
-
     fun selectToken(tokenId: Int) {
         if (isActionLocked) return
         val state = _gameState.value
         if (state.phase != TurnPhase.SELECTING_TOKEN || state.isGameOver) return
-        // Prevent accidental human taps from interrupting a bot's turn
         if (state.currentPlayer?.isBot == true) return
         if (!state.movableTokenIds.contains(tokenId)) return
 
-        // Prevent duplicate movement: cancel any scheduled auto-move
         autoMoveJob?.cancel()
         autoMoveJob = null
 
@@ -262,19 +365,17 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
 
         if (!LudoEngine.canTokenMove(token, roll)) return
 
-        // Calculate the authoritative final outcome from the start state
         val outcome = LudoEngine.executeMove(startState, tokenId)
         if (outcome.updatedState == startState) return
 
-        // 1. Visibly animate intermediate squares (approx. 100ms per square)
+        // 1. Visibly animate intermediate squares
         when (val pos = token.position) {
-            is com.example.model.TokenPosition.InBase -> {
-                // Leaving base yard onto start square (step 0)
+            is TokenPosition.InBase -> {
                 _gameState.update { current ->
                     val updatedPlayers = current.players.map { p ->
                         if (p.color == player.color) {
                             p.copy(tokens = p.tokens.map { t ->
-                                if (t.id == tokenId) t.copy(position = com.example.model.TokenPosition.OnBoard(step = 0)) else t
+                                if (t.id == tokenId) t.copy(position = TokenPosition.OnBoard(step = 0)) else t
                             })
                         } else p
                     }
@@ -288,16 +389,16 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
                 soundManager.playMove(startState.soundEnabled, startState.hapticsEnabled)
                 delay(stepDelay)
             }
-            is com.example.model.TokenPosition.OnBoard -> {
+            is TokenPosition.OnBoard -> {
                 val startStep = pos.step
                 val targetStep = startStep + roll
                 val stepDelay = startState.animationSpeed.stepDelayMs
 
                 for (s in (startStep + 1)..targetStep) {
                     val intermediatePos = if (s >= com.example.logic.LudoBoardMap.MAX_STEPS) {
-                        com.example.model.TokenPosition.Finished
+                        TokenPosition.Finished
                     } else {
-                        com.example.model.TokenPosition.OnBoard(step = s)
+                        TokenPosition.OnBoard(step = s)
                     }
 
                     _gameState.update { current ->
@@ -315,13 +416,13 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                     soundManager.playMove(startState.soundEnabled, startState.hapticsEnabled)
-                    delay(stepDelay) // Respects Normal (100ms) or Fast (60ms) animation speed
+                    delay(stepDelay)
                 }
             }
-            is com.example.model.TokenPosition.Finished -> {}
+            is TokenPosition.Finished -> {}
         }
 
-        // 2. Token arrived at final square - trigger destination sounds & resolution
+        // 2. Token arrived at final square
         when {
             outcome.capturedToken != null -> {
                 soundManager.playCapture(startState.soundEnabled, startState.hapticsEnabled)
@@ -336,19 +437,79 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        _gameState.value = outcome.updatedState
+        val finalState = if (outcome.updatedState.isGameOver) {
+            val durationSec = ((System.currentTimeMillis() - startState.matchStartTimeMs) / 1000L).coerceAtLeast(1L)
+            outcome.updatedState.copy(matchDurationSeconds = durationSec)
+        } else {
+            outcome.updatedState
+        }
 
-        // Record completed game stats once when game is over
-        if (outcome.updatedState.isGameOver && !hasRecordedGameCompletion) {
-            hasRecordedGameCompletion = true
-            val winner = outcome.updatedState.winnerPodium.firstOrNull() ?: outcome.updatedState.players.firstOrNull()
-            if (winner != null) {
-                statsRepository.recordCompletedGame(outcome.updatedState.players, winner)
-                _playerStats.value = statsRepository.getAllStats()
+        _gameState.value = finalState
+
+        // Bot reactions based on move outcome
+        if (player.isBot && outcome.capturedToken != null) {
+            triggerReaction(listOf("😎", "🔥", "👏").random(), player.name, player.color)
+        }
+        val capturedOwner = startState.players.find { it.color == outcome.capturedToken?.color }
+        if (capturedOwner?.isBot == true && capturedOwner.color != player.color) {
+            triggerReaction(listOf("😮", "😭", "😂").random(), capturedOwner.name, capturedOwner.color)
+        }
+        if (finalState.isGameOver) {
+            val winner = finalState.winnerPodium.firstOrNull() ?: finalState.players.firstOrNull()
+            if (winner?.isBot == true) {
+                triggerReaction("🎉", winner.name, winner.color)
             }
         }
 
-        // Dismiss capture emoji animation automatically after ~1.3 seconds
+        // Record completed game stats and history ONCE
+        if (finalState.isGameOver && !hasRecordedGameCompletion) {
+            hasRecordedGameCompletion = true
+            val winner = finalState.winnerPodium.firstOrNull() ?: finalState.players.firstOrNull()
+            if (winner != null) {
+                // Update persistent player records
+                statsRepository.recordCompletedGame(finalState.players, winner)
+                _playerStats.value = statsRepository.getAllStats()
+
+                // Save completed match to local game history
+                val dateFormat = SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault())
+                val formattedDate = dateFormat.format(Date())
+                val summaries = finalState.players.map { p ->
+                    MatchPlayerSummary(
+                        name = p.name,
+                        color = p.color,
+                        isBot = p.isBot,
+                        captures = p.captures,
+                        tokensHome = p.tokens.count { it.position is TokenPosition.Finished },
+                        avatar = p.avatar
+                    )
+                }
+
+                val historyRecord = MatchHistoryRecord(
+                    id = finalState.matchId,
+                    timestampMs = System.currentTimeMillis(),
+                    formattedDate = formattedDate,
+                    gameMode = finalState.gameMode,
+                    aiDifficulty = if (finalState.gameMode == GameMode.VS_COMPUTER) finalState.aiDifficulty else null,
+                    winnerName = winner.name,
+                    winnerColor = winner.color,
+                    winnerAvatar = winner.avatar,
+                    durationSeconds = finalState.matchDurationSeconds,
+                    players = summaries
+                )
+                gameHistoryRepository.recordMatch(historyRecord)
+                _matchHistory.value = gameHistoryRepository.getHistory()
+            }
+
+            // Clear saved active game so completed games are NEVER resumed
+            gameStateRepository.clearActiveGame()
+            _hasSavedGame.value = false
+        } else if (!finalState.isGameOver) {
+            // Auto-save active game state after move
+            gameStateRepository.saveActiveGame(finalState)
+            _hasSavedGame.value = true
+        }
+
+        // Dismiss capture emoji animation automatically
         if (outcome.captureEvent != null) {
             captureDismissJob?.cancel()
             captureDismissJob = viewModelScope.launch {
@@ -380,6 +541,11 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         _playerStats.value = statsRepository.getAllStats()
     }
 
+    fun clearMatchHistory() {
+        gameHistoryRepository.clearHistory()
+        _matchHistory.value = emptyList()
+    }
+
     private fun checkBotTurn(delayMs: Long = 450) {
         val state = _gameState.value
         if (state.isGameOver) return
@@ -389,7 +555,6 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
             botJob?.cancel()
             botJob = viewModelScope.launch {
                 delay(delayMs)
-                // Wait for any prior animation lock to clear
                 var waitCount = 0
                 while (isActionLocked && waitCount < 30) {
                     delay(50)
@@ -413,7 +578,6 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         botJob = viewModelScope.launch {
             delay(delayMs)
 
-            // Wait for any prior animation lock to clear
             var waitCount = 0
             while (isActionLocked && waitCount < 30) {
                 delay(50)
@@ -434,7 +598,6 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
 
             val movableIds = curState.movableTokenIds
             if (movableIds.isEmpty()) {
-                // If no legal moves available, safely advance turn to prevent getting stuck
                 val nextTurnIndex = LudoEngine.getNextActivePlayerIndex(curState.players, curState.currentTurnIndex)
                 val nextPlayer = curState.players[nextTurnIndex]
                 _gameState.update {
@@ -445,18 +608,19 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
                         statusMessage = "${nextPlayer.name}'s turn. Roll the dice!"
                     )
                 }
+                gameStateRepository.saveActiveGame(_gameState.value)
+                _hasSavedGame.value = true
+
                 soundManager.playTurnChange(_gameState.value.soundEnabled)
                 checkBotTurn(delayMs = 450)
                 return@launch
             }
 
-            // Always select and execute a legal move using fresh state and bot player
             val roll = curState.diceState.value
-            val chosenToken = LudoEngine.pickBestBotToken(curState, curPlayer, roll)
+            val chosenToken = LudoEngine.pickBestBotToken(curState, curPlayer, roll, curState.aiDifficulty)
             val selectedTokenId = if (chosenToken != null && chosenToken.id in movableIds) {
                 chosenToken.id
             } else {
-                // Guaranteed fallback: pick the first eligible token from movableIds
                 curPlayer.tokens.firstOrNull { it.id in movableIds }?.id ?: movableIds.first()
             }
 
@@ -516,8 +680,40 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         _gameState.update { it.copy(animationSpeed = speed) }
     }
 
+    fun setAiDifficulty(difficulty: AiDifficulty) {
+        settingsRepository.setAiDifficulty(difficulty)
+        _gameState.update { it.copy(aiDifficulty = difficulty) }
+    }
+
     fun toggleAutoRollBots() {
         _gameState.update { it.copy(autoRollBots = !it.autoRollBots) }
+    }
+
+    fun setBoardTheme(theme: BoardTheme) {
+        settingsRepository.setBoardTheme(theme)
+        _gameState.update { it.copy(boardTheme = theme) }
+    }
+
+    fun sendEmojiReaction(emoji: String) {
+        val cur = _gameState.value
+        val sender = cur.currentPlayer ?: cur.players.firstOrNull() ?: return
+        triggerReaction(emoji, sender.name, sender.color)
+    }
+
+    fun triggerReaction(emoji: String, senderName: String, senderColor: PlayerColor) {
+        reactionDismissJob?.cancel()
+        val event = EmojiReactionEvent(
+            emoji = emoji,
+            senderName = senderName,
+            senderColor = senderColor
+        )
+        _gameState.update { it.copy(activeReaction = event) }
+        reactionDismissJob = viewModelScope.launch {
+            delay(2400)
+            _gameState.update {
+                if (it.activeReaction?.id == event.id) it.copy(activeReaction = null) else it
+            }
+        }
     }
 
     override fun onCleared() {
@@ -526,6 +722,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         autoMoveJob?.cancel()
         captureDismissJob?.cancel()
         moveJob?.cancel()
+        reactionDismissJob?.cancel()
         soundManager.release()
     }
 }
