@@ -239,11 +239,25 @@ fun HistoryDialog(
                 Text(text = "Clear Match History?", fontWeight = FontWeight.Bold, color = Color.White)
             },
             text = {
-                Text(
-                    text = "Are you sure you want to permanently clear all completed match records? Ongoing stats will be retained.",
-                    color = Color(0xFFCBD5E1),
-                    fontSize = 13.sp
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Are you sure you want to clear match history? The following items will be deleted:",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        text = "• All past completed match cards\n• Match timestamps and duration details\n• Winner names and final podium rankings",
+                        color = Color(0xFFFCA5A5),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Note: Overall player statistics, player names, and any active saved game will NOT be deleted.",
+                        color = Color(0xFFFDE047),
+                        fontSize = 11.sp
+                    )
+                }
             },
             confirmButton = {
                 Button(

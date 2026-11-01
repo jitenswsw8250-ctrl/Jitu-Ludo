@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -56,12 +57,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -81,9 +85,13 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import com.example.model.AnimatedBackground
 import com.example.model.GameMode
 import com.example.model.GameState
 import com.example.model.PlayerColor
+import com.example.model.PlayerTeam
+import com.example.model.SoundPack
+import com.example.model.TokenPosition
 import com.example.ui.components.DiceControlSection
 import com.example.ui.components.LudoBoardView
 import com.example.ui.components.PlayerDiceControl
@@ -103,41 +111,88 @@ fun GameScreen(
     onSetAnimationSpeed: (com.example.model.AnimationSpeed) -> Unit = {},
     onSetSkin: (com.example.model.GameSkin) -> Unit = {},
     onOpenStats: () -> Unit,
+    onOpenProfile: () -> Unit = {},
     onSendEmojiReaction: (String) -> Unit = {},
+    onClearReaction: () -> Unit = {},
+    onResetSettingsToDefaults: () -> Unit = {},
+    onSetSoundPack: (SoundPack) -> Unit = {},
+    onSetSoundVolume: (Float) -> Unit = {},
+    onToggleTalkingTokens: () -> Unit = {},
+    onSetAnimatedBackground: (AnimatedBackground) -> Unit = {},
+    onPreviewSoundPack: (SoundPack) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showRulesDialog by remember { mutableStateOf(false) }
     var showSettingsMenu by remember { mutableStateOf(false) }
     var showSkinsDialog by remember { mutableStateOf(false) }
     var showEmojiPicker by remember { mutableStateOf(false) }
+    var showExitConfirmDialog by remember { mutableStateOf(false) }
     var boardBounds by remember { mutableStateOf<Rect?>(null) }
     var rootCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
+    // Lifecycle-aware auto-dismiss in Compose: guarantees reaction is never stuck across recomposition/activity recreation
+    val activeReaction = gameState.activeReaction
+    LaunchedEffect(activeReaction?.id) {
+        if (activeReaction != null) {
+            val remainingMs = (activeReaction.expiresAtMs - System.currentTimeMillis()).coerceAtLeast(0L)
+            val sleepMs = if (remainingMs in 1L..1500L) remainingMs else 1500L
+            delay(sleepMs)
+            onClearReaction()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            onClearReaction()
+        }
+    }
+
     BackHandler {
-        onNavigateHome()
+        if (!gameState.isGameOver) {
+            showExitConfirmDialog = true
+        } else {
+            onClearReaction()
+            onNavigateHome()
+        }
+    }
+
+    val bgGradientColors = when (gameState.animatedBackground) {
+        AnimatedBackground.ROYAL_PALACE -> listOf(
+            Color(0xFF381F13), // Warm golden bronze top
+            Color(0xFF241209), // Warm chocolate brown middle
+            Color(0xFF140804)  // Deep espresso brown bottom
+        )
+        AnimatedBackground.JUNGLE -> listOf(
+            Color(0xFF0F2618), // Deep emerald jungle canopy
+            Color(0xFF0B1B11), // Moss green middle
+            Color(0xFF061009)  // Dark rainforest earth
+        )
+        AnimatedBackground.SPACE -> listOf(
+            Color(0xFF0F172A), // Cosmic midnight blue
+            Color(0xFF0B1020), // Deep nebula indigo
+            Color(0xFF030712)  // Infinite space black
+        )
+        AnimatedBackground.FESTIVAL -> listOf(
+            Color(0xFF35131C), // Royal celebratory maroon
+            Color(0xFF240B13), // Warm festive garnet
+            Color(0xFF130509)  // Deep evening mahogany
+        )
     }
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .onGloballyPositioned { rootCoordinates = it }
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF381F13), // Warm golden bronze top
-                        Color(0xFF241209), // Warm chocolate brown middle
-                        Color(0xFF140804)  // Deep espresso brown bottom
-                    )
-                )
-            )
+            .background(Brush.verticalGradient(colors = bgGradientColors))
     ) {
         val screenHeight = maxHeight
         // Calculate max available board height so that the board, dice controls, bottom actions, and reserved banner fit comfortably
         val maxBoardDimension = (screenHeight - 200.dp).coerceAtLeast(240.dp)
 
-        // Subtle Glowing Star Sparkles in Background (matching reference photo)
+        // Subtle Glowing Star Sparkles in Background (matching theme & avoiding board)
         BackgroundSparklesCanvas(
             boardBounds = boardBounds,
+            animatedBackground = gameState.animatedBackground,
             modifier = Modifier.fillMaxSize()
         )
 
@@ -156,6 +211,16 @@ fun GameScreen(
 
             // Balanced top spacer for vertical screen centering on tall Android screens
             Spacer(modifier = Modifier.weight(1f))
+
+            // 0. TEAM MODE SCOREBOARD (Shown when gameMode == TEAM_2V2)
+            if (gameState.gameMode == GameMode.TEAM_2V2) {
+                TeamScoreboardBanner(
+                    gameState = gameState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp)
+                )
+            }
 
             // 1. TOP PLAYER DICE CONTROLS (Green at Top-Left, Yellow at Top-Right)
             Row(
@@ -348,17 +413,24 @@ fun GameScreen(
                             modifier = Modifier.size(24.dp)
                         )
                     },
-                    onClick = onNavigateHome,
+                    onClick = {
+                        if (!gameState.isGameOver) {
+                            showExitConfirmDialog = true
+                        } else {
+                            onNavigateHome()
+                        }
+                    },
                     contentDescription = "Back to Home",
                     testTag = "game_back_home_button"
                 )
 
-                // Center Game Mode Label (e.g. "Solo Classic" or "Pass & Play")
+                // Center Game Mode Label (e.g. "Solo Classic" or "Pass & Play" or "2 vs 2 Team Mode")
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = when (gameState.gameMode) {
                             GameMode.VS_COMPUTER -> "Solo"
                             GameMode.LOCAL_MULTIPLAYER -> "Pass & Play"
+                            GameMode.TEAM_2V2 -> "2 vs 2"
                         },
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
@@ -368,6 +440,7 @@ fun GameScreen(
                         text = when (gameState.gameMode) {
                             GameMode.VS_COMPUTER -> "Classic"
                             GameMode.LOCAL_MULTIPLAYER -> "${gameState.players.size} Players"
+                            GameMode.TEAM_2V2 -> "Team Mode"
                         },
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp,
@@ -415,6 +488,20 @@ fun GameScreen(
                         onClick = onOpenStats,
                         contentDescription = "Statistics",
                         testTag = "game_statistics_button"
+                    )
+
+                    CircularGreenButton(
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = "Profile",
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        },
+                        onClick = onOpenProfile,
+                        contentDescription = "Player Profile",
+                        testTag = "game_profile_button"
                     )
 
                     CircularGreenButton(
@@ -469,9 +556,20 @@ fun GameScreen(
             hapticsEnabled = gameState.hapticsEnabled,
             animationSpeed = gameState.animationSpeed,
             currentSkin = gameState.currentSkin,
+            aiDifficulty = gameState.aiDifficulty,
+            boardTheme = gameState.boardTheme,
+            soundPack = gameState.soundPack,
+            soundVolume = gameState.soundVolume,
+            talkingTokensEnabled = gameState.talkingTokensEnabled,
+            animatedBackground = gameState.animatedBackground,
             onToggleSound = onToggleSound,
             onToggleHaptics = onToggleHaptics,
             onSetAnimationSpeed = onSetAnimationSpeed,
+            onSetSoundPack = onSetSoundPack,
+            onSetSoundVolume = onSetSoundVolume,
+            onToggleTalkingTokens = onToggleTalkingTokens,
+            onSetAnimatedBackground = onSetAnimatedBackground,
+            onPreviewSoundPack = onPreviewSoundPack,
             onOpenSkins = {
                 showSettingsMenu = false
                 showSkinsDialog = true
@@ -484,6 +582,7 @@ fun GameScreen(
                 showSettingsMenu = false
                 onRestartGame()
             },
+            onResetSettingsToDefaults = onResetSettingsToDefaults,
             onDismiss = { showSettingsMenu = false }
         )
     }
@@ -503,6 +602,7 @@ fun GameScreen(
             podium = gameState.winnerPodium,
             allPlayers = gameState.players,
             matchDurationSeconds = gameState.matchDurationSeconds,
+            gameMode = gameState.gameMode,
             onPlayAgain = onRestartGame,
             onHome = onNavigateHome,
             onOpenStats = onOpenStats
@@ -512,6 +612,67 @@ fun GameScreen(
     // Rules Modal
     if (showRulesDialog) {
         RulesDialog(onDismiss = { showRulesDialog = false })
+    }
+
+    // Exit Match Confirmation Dialog
+    if (showExitConfirmDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showExitConfirmDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = Color(0xFFF59E0B),
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Exit Current Match?",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Your match progress is automatically saved to this device.",
+                        color = Color(0xFFE2E8F0),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "You can resume this game anytime from the Home screen by tapping 'Resume Game'.",
+                        color = Color(0xFFFDE047),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showExitConfirmDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.testTag("resume_match_button")
+                ) {
+                    Text(text = "Resume Game", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        showExitConfirmDialog = false
+                        onNavigateHome()
+                    },
+                    modifier = Modifier.testTag("confirm_exit_button")
+                ) {
+                    Text(text = "Exit to Home", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = Color(0xFF1E0E07),
+            shape = RoundedCornerShape(18.dp)
+        )
     }
 }
 
@@ -528,19 +689,20 @@ private fun FloatingReactionBubble(reaction: com.example.model.EmojiReactionEven
         label = "bubbleFloatAnim"
     )
 
-    Card(
+    Box(
         modifier = Modifier
             .graphicsLayer { translationY = floatOffset }
-            .testTag("active_emoji_reaction_bubble"),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xEE1E0E07)),
-        border = androidx.compose.foundation.BorderStroke(
-            width = 2.dp,
-            brush = Brush.linearGradient(
-                listOf(Color(0xFFFFFBEB), Color(0xFFFDE047), Color(0xFFF59E0B))
+            .shadow(elevation = 14.dp, shape = RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color(0xEE1E0E07))
+            .border(
+                width = 2.dp,
+                brush = Brush.linearGradient(
+                    listOf(Color(0xFFFFFBEB), Color(0xFFFDE047), Color(0xFFF59E0B))
+                ),
+                shape = RoundedCornerShape(22.dp)
             )
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 14.dp)
+            .testTag("active_emoji_reaction_bubble")
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -739,6 +901,7 @@ private val SPARKLE_ITEMS = listOf(
 @Composable
 fun BackgroundSparklesCanvas(
     boardBounds: Rect? = null,
+    animatedBackground: AnimatedBackground = AnimatedBackground.ROYAL_PALACE,
     modifier: Modifier = Modifier
 ) {
     // Continuous, monotonic time stream across entire play session with zero reset/loop jumps
@@ -977,6 +1140,30 @@ fun BackgroundSparklesCanvas(
 
             val finalPt = Offset(finalX, finalY)
 
+            // Dynamic particle colors matching selected ambient background theme
+            val (haloBaseColor, innerBaseColor, crossBaseColor) = when (animatedBackground) {
+                AnimatedBackground.ROYAL_PALACE -> Triple(
+                    Color(0xFFF59E0B), // Warm royal amber
+                    Color(0xFFFEF3C7), // Warm golden cream
+                    Color(0xFFFFFBEB)  // Brilliant star white
+                )
+                AnimatedBackground.JUNGLE -> Triple(
+                    Color(0xFF10B981), // Emerald firefly glow
+                    Color(0xFFA7F3D0), // Soft mint luminescence
+                    Color(0xFFECFDF5)  // Pale green star
+                )
+                AnimatedBackground.SPACE -> Triple(
+                    Color(0xFF818CF8), // Deep celestial periwinkle
+                    Color(0xFFC7D2FE), // Soft nebula white
+                    Color(0xFFEEF2FF)  // Brilliant starlight
+                )
+                AnimatedBackground.FESTIVAL -> Triple(
+                    Color(0xFFF97316), // Warm festival lantern amber
+                    Color(0xFFFED7AA), // Festive peach shimmer
+                    Color(0xFFFFF7ED)  // Sparkler white
+                )
+            }
+
             // Subtle glowing shimmer (independent gentle pulse for each sparkle)
             val shimmer = ((sin(t * item.glowSpeed + item.glowPhase) + 1f) * 0.5f).coerceIn(0f, 1f)
 
@@ -984,14 +1171,14 @@ fun BackgroundSparklesCanvas(
             val haloRadius = r * (2.1f + 0.45f * shimmer)
             val haloAlpha = (0.16f + 0.16f * shimmer).coerceIn(0.12f, 0.35f)
             drawCircle(
-                color = Color(0xFFF59E0B).copy(alpha = haloAlpha),
+                color = haloBaseColor.copy(alpha = haloAlpha),
                 radius = haloRadius,
                 center = finalPt
             )
 
             // 2. Subtle warm inner golden halo
             drawCircle(
-                color = Color(0xFFFEF3C7).copy(alpha = haloAlpha * 0.6f),
+                color = innerBaseColor.copy(alpha = haloAlpha * 0.6f),
                 radius = r * 1.15f,
                 center = finalPt
             )
@@ -999,7 +1186,7 @@ fun BackgroundSparklesCanvas(
             // 3. 4-point golden star cross with subtle breathing arm length & brightness
             val armLen = r * (1.5f + 0.3f * shimmer)
             val armThick = 1.4.dp.toPx()
-            val crossColor = Color(0xFFFFFBEB).copy(alpha = (0.82f + 0.18f * shimmer).coerceIn(0.75f, 1f))
+            val crossColor = crossBaseColor.copy(alpha = (0.82f + 0.18f * shimmer).coerceIn(0.75f, 1f))
             drawLine(
                 color = crossColor,
                 start = Offset(finalPt.x - armLen, finalPt.y),
@@ -1060,3 +1247,185 @@ fun CircularGreenButton(
         icon()
     }
 }
+
+@Composable
+private fun TeamScoreboardBanner(
+    gameState: GameState,
+    modifier: Modifier = Modifier
+) {
+    val teamAPlayers = gameState.players.filter { it.team == PlayerTeam.TEAM_A }
+    val teamBPlayers = gameState.players.filter { it.team == PlayerTeam.TEAM_B }
+    val teamAHome = teamAPlayers.sumOf { p -> p.tokens.count { it.position is TokenPosition.Finished } }
+    val teamBHome = teamBPlayers.sumOf { p -> p.tokens.count { it.position is TokenPosition.Finished } }
+    val teamACaptures = teamAPlayers.sumOf { it.captures }
+    val teamBCaptures = teamBPlayers.sumOf { it.captures }
+    val currentTurnColor = gameState.currentPlayer?.color
+    val isTeamATurn = currentTurnColor == PlayerColor.RED || currentTurnColor == PlayerColor.YELLOW
+    val isTeamBTurn = currentTurnColor == PlayerColor.GREEN || currentTurnColor == PlayerColor.BLUE
+
+    androidx.compose.material3.Card(
+        modifier = modifier.testTag("team_mode_scoreboard_banner"),
+        shape = RoundedCornerShape(14.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xF0180B05)),
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFB45309).copy(alpha = 0.6f)),
+        elevation = androidx.compose.material3.CardDefaults.cardElevation(defaultElevation = 6.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Team A block (Red & Yellow)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        if (isTeamATurn) {
+                            Brush.horizontalGradient(listOf(Color(0xFF881337), Color(0xFF78350F)))
+                        } else {
+                            Brush.horizontalGradient(listOf(Color(0xFF261208), Color(0xFF1E0E06)))
+                        }
+                    )
+                    .border(
+                        width = if (isTeamATurn) 1.5.dp else 1.dp,
+                        color = if (isTeamATurn) Color(0xFFFDE047) else Color(0xFF78350F).copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "TEAM A",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 11.sp,
+                                color = if (isTeamATurn) Color(0xFFFDE047) else Color(0xFFF59E0B)
+                            )
+                            if (isTeamATurn) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "▶", fontSize = 9.sp, color = Color(0xFFFDE047))
+                            }
+                        }
+                        Text(
+                            text = "$teamAHome/8 🏠",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = if (teamAHome >= 8) Color(0xFF4ADE80) else Color.White
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Red & Yellow",
+                            fontSize = 10.sp,
+                            color = Color(0xFFE2E8F0),
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "⚔️ $teamACaptures",
+                            fontSize = 10.sp,
+                            color = Color(0xFFFBBF24),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // VS center divider
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 6.dp)
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF381A0B))
+                    .border(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "VS",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 9.sp,
+                    color = Color(0xFFFDE047)
+                )
+            }
+
+            // Team B block (Green & Blue)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        if (isTeamBTurn) {
+                            Brush.horizontalGradient(listOf(Color(0xFF064E3B), Color(0xFF1E3A8A)))
+                        } else {
+                            Brush.horizontalGradient(listOf(Color(0xFF132219), Color(0xFF121B2B)))
+                        }
+                    )
+                    .border(
+                        width = if (isTeamBTurn) 1.5.dp else 1.dp,
+                        color = if (isTeamBTurn) Color(0xFF38BDF8) else Color(0xFF1E3A8A).copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "TEAM B",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 11.sp,
+                                color = if (isTeamBTurn) Color(0xFF38BDF8) else Color(0xFF60A5FA)
+                            )
+                            if (isTeamBTurn) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "▶", fontSize = 9.sp, color = Color(0xFF38BDF8))
+                            }
+                        }
+                        Text(
+                            text = "$teamBHome/8 🏠",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = if (teamBHome >= 8) Color(0xFF4ADE80) else Color.White
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Green & Blue",
+                            fontSize = 10.sp,
+                            color = Color(0xFFE2E8F0),
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "⚔️ $teamBCaptures",
+                            fontSize = 10.sp,
+                            color = Color(0xFF38BDF8),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+

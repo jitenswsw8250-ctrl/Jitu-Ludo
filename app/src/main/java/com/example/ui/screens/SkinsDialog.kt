@@ -341,6 +341,11 @@ private fun TokenPreviewCanvas(skin: GameSkin, modifier: Modifier = Modifier) {
             GameSkin.SAPPHIRE -> Triple(Color(0xFFBAE6FD), Color(0xFF2563EB), Color(0xFF1E3A8A))
             GameSkin.GOLD -> Triple(Color(0xFFFEF08A), Color(0xFFEAB308), Color(0xFF78350F))
             GameSkin.SILVER -> Triple(Color(0xFFF8FAFC), Color(0xFF94A3B8), Color(0xFF334155))
+            GameSkin.DIAMOND -> Triple(Color(0xFFE0F2FE), Color(0xFF38BDF8), Color(0xFF0284C7))
+            GameSkin.FIRE -> Triple(Color(0xFFFDE047), Color(0xFFEA580C), Color(0xFF9A3412))
+            GameSkin.ICE -> Triple(Color(0xFFCFFAFE), Color(0xFF06B6D4), Color(0xFF164E63))
+            GameSkin.ROYAL_GOLD -> Triple(Color(0xFFFFFBEB), Color(0xFFF59E0B), Color(0xFF78350F))
+            GameSkin.RAINBOW -> Triple(Color(0xFFF472B6), Color(0xFFA855F7), Color(0xFF4338CA))
         }
 
         // 1. Pedestal / Bell

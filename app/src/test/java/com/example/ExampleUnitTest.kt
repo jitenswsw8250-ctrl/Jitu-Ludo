@@ -5,11 +5,15 @@ import com.example.data.StatsRepository
 import com.example.logic.GridCoord
 import com.example.logic.LudoBoardMap
 import com.example.logic.LudoEngine
+import com.example.model.AnimatedBackground
 import com.example.model.DiceState
 import com.example.model.GameMode
+import com.example.model.GameSkin
 import com.example.model.GameState
 import com.example.model.Player
 import com.example.model.PlayerColor
+import com.example.model.SoundPack
+import com.example.model.TalkingTokenEvent
 import com.example.model.Token
 import com.example.model.TokenPosition
 import com.example.model.TurnPhase
@@ -1376,13 +1380,18 @@ class ExampleUnitTest {
     @Test
     fun test_gameSkins_definedProperly() {
         val skins = com.example.model.GameSkin.values()
-        assertEquals(6, skins.size)
+        assertEquals(11, skins.size)
         assertTrue(skins.contains(com.example.model.GameSkin.CLASSIC))
         assertTrue(skins.contains(com.example.model.GameSkin.RUBY))
         assertTrue(skins.contains(com.example.model.GameSkin.EMERALD))
         assertTrue(skins.contains(com.example.model.GameSkin.SAPPHIRE))
         assertTrue(skins.contains(com.example.model.GameSkin.GOLD))
         assertTrue(skins.contains(com.example.model.GameSkin.SILVER))
+        assertTrue(skins.contains(com.example.model.GameSkin.DIAMOND))
+        assertTrue(skins.contains(com.example.model.GameSkin.FIRE))
+        assertTrue(skins.contains(com.example.model.GameSkin.ICE))
+        assertTrue(skins.contains(com.example.model.GameSkin.ROYAL_GOLD))
+        assertTrue(skins.contains(com.example.model.GameSkin.RAINBOW))
 
         for (skin in skins) {
             assertTrue(skin.title.isNotEmpty())
@@ -1568,6 +1577,16 @@ class ExampleUnitTest {
         assertEquals(PlayerColor.RED, reactionEvent.senderColor)
         assertEquals("🔥", reactionEvent.emoji)
         assertTrue("Reaction must be in supported list", validReactions.contains(reactionEvent.emoji))
+        assertEquals("expiresAtMs must be exactly 1500ms after timestampMs", 2500L, reactionEvent.expiresAtMs)
+        assertTrue("Reaction ID must be valid positive nanoTime", reactionEvent.id != 0L)
+
+        // Multiple rapid events generate unique IDs
+        val event2 = com.example.model.EmojiReactionEvent(
+            senderColor = PlayerColor.BLUE,
+            senderName = "Player 2",
+            emoji = "🎉"
+        )
+        assertFalse("Subsequent reaction events must have distinct unique IDs", reactionEvent.id == event2.id)
     }
 
     // =========================================================================
@@ -1685,7 +1704,451 @@ class ExampleUnitTest {
         assertTrue(R.drawable.bg_splash_window != 0)
         assertTrue(R.color.splash_background != 0)
     }
+
+    // =========================================================================
+    // 7 ULTIMATE PREMIUM EXPERIENCE FEATURE TESTS
+    // =========================================================================
+
+    // 1. Lucky Dice Effects
+    @Test
+    fun test_luckyDiceEffects_fairProbabilitiesAndBonusOnSix() {
+        val player = Player(color = PlayerColor.RED, name = "Red")
+        val state = GameState(players = listOf(player), currentTurnIndex = 0, phase = TurnPhase.WAITING_FOR_ROLL)
+
+        // Rolling a 6 sets rolling phase, increments consecutiveSixes, and awards bonus turn
+        val state6 = LudoEngine.rollDice(state, forcedRoll = 6)
+        assertEquals(6, state6.diceState.value)
+        assertEquals(1, state6.diceState.consecutiveSixes)
+
+        // Fair distribution: rolling randomly produces values strictly between 1 and 6
+        val observedValues = mutableSetOf<Int>()
+        for (i in 1..200) {
+            val roll = LudoEngine.rollDice(state).diceState.value
+            assertTrue("Dice roll must be between 1 and 6", roll in 1..6)
+            observedValues.add(roll)
+        }
+        assertTrue("Fair dice must cover all numbers 1 through 6 over 200 rolls", observedValues.containsAll(listOf(1, 2, 3, 4, 5, 6)))
+    }
+
+    // 2. Animated Ludo Board
+    @Test
+    fun test_animatedLudoBoard_safeSquaresAndTrackPathIntact() {
+        // Safe squares on 52-cell track: starting squares 0, 13, 26, 39 and star squares 8, 21, 34, 47
+        val expectedSafeSquares = setOf(0, 8, 13, 21, 26, 34, 39, 47)
+        assertEquals("There must be exactly 8 safe squares on outer track", 8, LudoBoardMap.SAFE_TRACK_INDICES.size)
+        assertEquals(expectedSafeSquares, LudoBoardMap.SAFE_TRACK_INDICES)
+
+        // Outer track coordinates must have 52 unique cells
+        assertEquals(52, LudoBoardMap.OUTER_TRACK.size)
+        val uniqueOuterCells = LudoBoardMap.OUTER_TRACK.toSet()
+        assertEquals("All 52 outer track grid coordinates must be valid and distinct", 52, uniqueOuterCells.size)
+    }
+
+    // 3. Talking Tokens
+    @Test
+    fun test_talkingTokens_eventDataModelAndToggle() {
+        val event = TalkingTokenEvent(
+            tokenId = 1,
+            color = PlayerColor.GREEN,
+            phrase = "Zooming forward!",
+            emoji = "🚀"
+        )
+        assertEquals(1, event.tokenId)
+        assertEquals(PlayerColor.GREEN, event.color)
+        assertEquals("Zooming forward!", event.phrase)
+        assertEquals("🚀", event.emoji)
+
+        // State supports toggling talking tokens
+        val stateEnabled = GameState(talkingTokensEnabled = true)
+        assertTrue(stateEnabled.talkingTokensEnabled)
+        val stateDisabled = stateEnabled.copy(talkingTokensEnabled = false)
+        assertFalse(stateDisabled.talkingTokensEnabled)
+    }
+
+    // 4. Royal Victory Celebration
+    @Test
+    fun test_royalVictoryCelebration_podiumAndStatsRecorded() {
+        val allFinishedTokens = List(4) { Token(id = it, color = PlayerColor.YELLOW, position = TokenPosition.Finished) }
+        val winnerPlayer = Player(color = PlayerColor.YELLOW, name = "Queen Jitu", tokens = allFinishedTokens)
+        val runnerUp = Player(color = PlayerColor.RED, name = "Red Warrior")
+
+        val state = GameState(
+            players = listOf(winnerPlayer, runnerUp),
+            currentTurnIndex = 0,
+            diceState = DiceState(value = 1),
+            phase = TurnPhase.SELECTING_TOKEN,
+            winnerPodium = listOf(winnerPlayer),
+            isGameOver = true,
+            matchDurationSeconds = 145
+        )
+
+        // Winning player has finished
+        assertTrue(winnerPlayer.isFinished)
+        assertFalse(runnerUp.isFinished)
+        assertEquals(1, state.winnerPodium.size)
+        assertEquals("Queen Jitu", state.winnerPodium[0].name)
+        assertEquals(PlayerColor.YELLOW, state.winnerPodium[0].color)
+        assertEquals(4, state.winnerPodium[0].finishedTokensCount)
+        assertEquals(145, state.matchDurationSeconds)
+    }
+
+    // 5. Special Goti Collection
+    @Test
+    fun test_specialGotiCollection_all11SkinsAvailableAndUnique() {
+        val allSkins = GameSkin.values()
+        assertEquals("Goti collection must have 11 skins", 11, allSkins.size)
+
+        // Verify the 5 new premium requested skins are present
+        assertTrue(allSkins.contains(GameSkin.DIAMOND))
+        assertTrue(allSkins.contains(GameSkin.FIRE))
+        assertTrue(allSkins.contains(GameSkin.ICE))
+        assertTrue(allSkins.contains(GameSkin.ROYAL_GOLD))
+        assertTrue(allSkins.contains(GameSkin.RAINBOW))
+
+        // Verify existing classic/metallic skins are preserved
+        assertTrue(allSkins.contains(GameSkin.CLASSIC))
+        assertTrue(allSkins.contains(GameSkin.RUBY))
+        assertTrue(allSkins.contains(GameSkin.EMERALD))
+        assertTrue(allSkins.contains(GameSkin.SAPPHIRE))
+        assertTrue(allSkins.contains(GameSkin.GOLD))
+        assertTrue(allSkins.contains(GameSkin.SILVER))
+
+        // Verify all skins have non-blank titles and descriptions
+        for (skin in allSkins) {
+            assertTrue("Skin title must not be blank", skin.title.isNotBlank())
+            assertTrue("Skin description must not be blank", skin.description.isNotBlank())
+        }
+    }
+
+    // 6. Animated Backgrounds
+    @Test
+    fun test_animatedBackgrounds_allFourThemesConfigured() {
+        val backgrounds = AnimatedBackground.values()
+        assertEquals(4, backgrounds.size)
+        assertTrue(backgrounds.contains(AnimatedBackground.ROYAL_PALACE))
+        assertTrue(backgrounds.contains(AnimatedBackground.JUNGLE))
+        assertTrue(backgrounds.contains(AnimatedBackground.SPACE))
+        assertTrue(backgrounds.contains(AnimatedBackground.FESTIVAL))
+
+        for (bg in backgrounds) {
+            assertTrue("Background title must not be blank", bg.title.isNotBlank())
+            assertTrue("Background description must not be blank", bg.description.isNotBlank())
+        }
+    }
+
+    // 7. Custom Game Sound Packs
+    @Test
+    fun test_customGameSoundPacks_allPacksAndVolumeSliderConfigured() {
+        val soundPacks = SoundPack.values()
+        assertEquals(3, soundPacks.size)
+        assertTrue(soundPacks.contains(SoundPack.CLASSIC))
+        assertTrue(soundPacks.contains(SoundPack.ROYAL))
+        assertTrue(soundPacks.contains(SoundPack.FUN))
+
+        for (pack in soundPacks) {
+            assertTrue("Sound pack title must not be blank", pack.title.isNotBlank())
+            assertTrue("Sound pack description must not be blank", pack.description.isNotBlank())
+        }
+
+        // Volume levels in range 0.0f..1.0f
+        val state = GameState(soundVolume = 0.75f, soundPack = SoundPack.ROYAL)
+        assertEquals(0.75f, state.soundVolume, 0.001f)
+        assertEquals(SoundPack.ROYAL, state.soundPack)
+        val mutedVolumeState = state.copy(soundVolume = 0.0f)
+        assertEquals(0.0f, mutedVolumeState.soundVolume, 0.001f)
+    }
+
+    // =========================================================================
+    // 3 NEW PREMIUM FEATURES TESTS
+    // =========================================================================
+
+    // 1. Premium 3D Dice Roll Animation
+    @Test
+    fun test_feature1_premium3DDiceRoll_resultMatchesAndRollStateConsistent() {
+        val player = Player(
+            color = PlayerColor.RED,
+            name = "Champion",
+            tokens = listOf(Token(id = 0, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 5)))
+        )
+        val initialState = GameState(
+            players = listOf(player),
+            currentTurnIndex = 0,
+            diceState = DiceState(value = 1, isRolling = false),
+            phase = TurnPhase.WAITING_FOR_ROLL
+        )
+
+        // While rolling, isRolling = true
+        val rollingState = initialState.copy(diceState = initialState.diceState.copy(isRolling = true))
+        assertTrue("Dice should be rolling", rollingState.diceState.isRolling)
+
+        // Engine roll resolves to exact final dice number
+        for (forcedValue in 1..6) {
+            val resolved = LudoEngine.rollDice(initialState, forcedRoll = forcedValue)
+            assertEquals("Dice face value must match engine result", forcedValue, resolved.diceState.value)
+            assertFalse("Rolling flag must be cleared on resolution", resolved.diceState.isRolling)
+        }
+    }
+
+    // 2. Premium Token Capture Effect
+    @Test
+    fun test_feature2_premiumTokenCapture_triggersEventAndReturnsCapturedTokenToBase() {
+        // Red token at step 0 (outer track index 0).
+        // Blue token on the track such that when Red rolls 10, Red lands on Blue's cell.
+        // Blue start index is 39. Track index 10 corresponds to Blue step = (10 - 39 + 52) % 52 = 23.
+        val redToken = Token(id = 0, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 0))
+        val blueToken = Token(id = 1, color = PlayerColor.BLUE, position = TokenPosition.OnBoard(step = 23))
+
+        val redPlayer = Player(color = PlayerColor.RED, name = "Red Striker", tokens = listOf(redToken))
+        val bluePlayer = Player(color = PlayerColor.BLUE, name = "Blue Defender", tokens = listOf(blueToken))
+
+        val state = GameState(
+            players = listOf(redPlayer, bluePlayer),
+            currentTurnIndex = 0,
+            diceState = DiceState(value = 10),
+            phase = TurnPhase.SELECTING_TOKEN
+        )
+
+        val outcome = LudoEngine.executeMove(state, tokenId = 0)
+
+        // 1. Captured token must be returned to InBase
+        assertNotNull("Capture outcome must report a captured token", outcome.capturedToken)
+        val captured = outcome.updatedState.players.find { it.color == PlayerColor.BLUE }?.tokens?.find { it.id == 1 }
+        assertEquals("Captured token must be returned to starting base position", TokenPosition.InBase, captured?.position)
+
+        // 2. Capture animation event must be generated with exact board coordinate
+        assertNotNull("Capture animation event must be created", outcome.captureEvent)
+        assertEquals(PlayerColor.RED, outcome.captureEvent?.capturingPlayerColor)
+        assertEquals(PlayerColor.BLUE, outcome.captureEvent?.capturedPlayerColor)
+        assertEquals("Red Striker", outcome.captureEvent?.capturingPlayerName)
+        assertEquals("Blue Defender", outcome.captureEvent?.capturedPlayerName)
+
+        // 3. Captures count incremented
+        val updatedRedPlayer = outcome.updatedState.players.find { it.color == PlayerColor.RED }
+        assertEquals(1, updatedRedPlayer?.captures)
+    }
+
+    // 3. Player Profile System
+    @Test
+    fun test_feature3_playerProfileSystem_allTenAvatarsAndSevenStatsTracked() {
+        // A. 10 Avatars check
+        val avatars = com.example.model.PlayerAvatar.values()
+        assertEquals("Must support exactly 10 player avatars", 10, avatars.size)
+        val expectedAvatarIds = setOf("king", "tiger", "ninja", "lion", "robot", "wizard", "falcon", "star", "dragon", "queen")
+        assertEquals(expectedAvatarIds, avatars.map { it.id }.toSet())
+
+        // B. 7 Career Stats tracking
+        val statsRecord = PlayerStatsRecord(
+            id = "human:alex",
+            name = "Alex",
+            color = PlayerColor.RED,
+            isBot = false,
+            completedGames = 10,
+            wins = 7,
+            losses = 3,
+            captures = 14,
+            tokensHome = 22,
+            bestStreak = 4,
+            currentStreak = 2
+        )
+
+        assertEquals(10, statsRecord.completedGames)
+        assertEquals(7, statsRecord.wins)
+        assertEquals(3, statsRecord.losses)
+        assertEquals("70%", statsRecord.winPercentageFormatted)
+        assertEquals(14, statsRecord.captures)
+        assertEquals(22, statsRecord.tokensHome)
+        assertEquals(4, statsRecord.bestStreak)
+        assertEquals(2, statsRecord.currentStreak)
+    }
+
+    // =========================================================================
+    // 2 VS 2 TEAM MODE UNIT TESTS
+    // =========================================================================
+
+    @Test
+    fun test_teamMode_teamAssignmentsAndOppositePartners() {
+        val red = Player(color = PlayerColor.RED, name = "Red")
+        val green = Player(color = PlayerColor.GREEN, name = "Green")
+        val yellow = Player(color = PlayerColor.YELLOW, name = "Yellow")
+        val blue = Player(color = PlayerColor.BLUE, name = "Blue")
+
+        // Rule 2: Team A is Red + Yellow; Team B is Green + Blue
+        assertEquals(com.example.model.PlayerTeam.TEAM_A, red.team)
+        assertEquals(com.example.model.PlayerTeam.TEAM_A, yellow.team)
+        assertEquals(com.example.model.PlayerTeam.TEAM_B, green.team)
+        assertEquals(com.example.model.PlayerTeam.TEAM_B, blue.team)
+
+        // Helper check
+        assertTrue(LudoEngine.isTeammate(PlayerColor.RED, PlayerColor.YELLOW))
+        assertTrue(LudoEngine.isTeammate(PlayerColor.YELLOW, PlayerColor.RED))
+        assertTrue(LudoEngine.isTeammate(PlayerColor.GREEN, PlayerColor.BLUE))
+        assertTrue(LudoEngine.isTeammate(PlayerColor.BLUE, PlayerColor.GREEN))
+
+        assertFalse(LudoEngine.isTeammate(PlayerColor.RED, PlayerColor.GREEN))
+        assertFalse(LudoEngine.isTeammate(PlayerColor.RED, PlayerColor.BLUE))
+        assertFalse(LudoEngine.isTeammate(PlayerColor.YELLOW, PlayerColor.GREEN))
+        assertFalse(LudoEngine.isTeammate(PlayerColor.YELLOW, PlayerColor.BLUE))
+    }
+
+    @Test
+    fun test_teamMode_noFriendlyFire_teammatesCannotCaptureEachOther() {
+        // Red start is track index 0 (step 0).
+        // Let's place Yellow token (Team A partner) at a common outer track position that is NOT a safe square.
+        // For instance, Yellow's start is track index 26 (Yellow step 0).
+        // For Red, track index 26 is step 26 (not a safe square).
+        val redToken = Token(id = 0, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 20))
+        val yellowPartnerToken = Token(id = 0, color = PlayerColor.YELLOW, position = TokenPosition.OnBoard(step = 0)) // track 26
+
+        val redPlayer = Player(color = PlayerColor.RED, name = "Red P1", tokens = listOf(redToken))
+        val greenPlayer = Player(color = PlayerColor.GREEN, name = "Green P2", tokens = listOf(Token(id = 0, color = PlayerColor.GREEN, position = TokenPosition.InBase)))
+        val yellowPlayer = Player(color = PlayerColor.YELLOW, name = "Yellow P3", tokens = listOf(yellowPartnerToken))
+        val bluePlayer = Player(color = PlayerColor.BLUE, name = "Blue P4", tokens = listOf(Token(id = 0, color = PlayerColor.BLUE, position = TokenPosition.InBase)))
+
+        val state = GameState(
+            players = listOf(redPlayer, greenPlayer, yellowPlayer, bluePlayer),
+            currentTurnIndex = 0,
+            diceState = DiceState(value = 6), // 20 + 6 = 26, landing on Yellow
+            phase = TurnPhase.SELECTING_TOKEN,
+            gameMode = GameMode.TEAM_2V2
+        )
+
+        val outcome = LudoEngine.executeMove(state, tokenId = 0)
+
+        // Yellow partner token should NOT be captured because they are teammates!
+        val updatedYellow = outcome.updatedState.players.find { it.color == PlayerColor.YELLOW }
+        assertEquals("Teammate Yellow token must NOT be sent to base", TokenPosition.OnBoard(step = 0), updatedYellow?.tokens?.get(0)?.position)
+        assertNull("No capture event should be generated when landing on teammate", outcome.capturedToken)
+        assertEquals("Red captures must be 0", 0, outcome.updatedState.players.find { it.color == PlayerColor.RED }?.captures)
+    }
+
+    @Test
+    fun test_teamMode_opponentTokenCanBeCaptured() {
+        // Green start is track index 13 (Green step 0).
+        // Red step 13 lands on track index 13 (not a safe square, Green start is safe for Green but let's test a non-safe cell).
+        // Safe squares on outer track: 0, 8, 13, 21, 26, 34, 39, 47.
+        // Track 14 is non-safe!
+        // Red step 14 is track 14.
+        // Green start is track 13 (step 0), so Green step 1 is track 14.
+        val redToken = Token(id = 0, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 10))
+        val greenOpponentToken = Token(id = 0, color = PlayerColor.GREEN, position = TokenPosition.OnBoard(step = 1)) // track 14
+
+        val redPlayer = Player(color = PlayerColor.RED, name = "Red P1", tokens = listOf(redToken))
+        val greenPlayer = Player(color = PlayerColor.GREEN, name = "Green P2", tokens = listOf(greenOpponentToken))
+        val yellowPlayer = Player(color = PlayerColor.YELLOW, name = "Yellow P3", tokens = listOf(Token(id = 0, color = PlayerColor.YELLOW, position = TokenPosition.InBase)))
+        val bluePlayer = Player(color = PlayerColor.BLUE, name = "Blue P4", tokens = listOf(Token(id = 0, color = PlayerColor.BLUE, position = TokenPosition.InBase)))
+
+        val state = GameState(
+            players = listOf(redPlayer, greenPlayer, yellowPlayer, bluePlayer),
+            currentTurnIndex = 0,
+            diceState = DiceState(value = 4), // 10 + 4 = 14, landing on Green at track 14
+            phase = TurnPhase.SELECTING_TOKEN,
+            gameMode = GameMode.TEAM_2V2
+        )
+
+        val outcome = LudoEngine.executeMove(state, tokenId = 0)
+
+        // Opponent Green token MUST be captured
+        val updatedGreen = outcome.updatedState.players.find { it.color == PlayerColor.GREEN }
+        assertEquals("Opponent Green token MUST be sent to base", TokenPosition.InBase, updatedGreen?.tokens?.get(0)?.position)
+        assertNotNull("Capture event must be generated", outcome.capturedToken)
+        assertEquals(PlayerColor.GREEN, outcome.capturedToken?.color)
+        assertEquals("Red captures must be 1", 1, outcome.updatedState.players.find { it.color == PlayerColor.RED }?.captures)
+    }
+
+    @Test
+    fun test_teamMode_teammateContinuesWhenOnePlayerFinishesAllFourTokens() {
+        // Red completes 4th token into home
+        val finishedTokens = listOf(
+            Token(id = 0, color = PlayerColor.RED, position = TokenPosition.Finished),
+            Token(id = 1, color = PlayerColor.RED, position = TokenPosition.Finished),
+            Token(id = 2, color = PlayerColor.RED, position = TokenPosition.Finished),
+            Token(id = 3, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 55)) // 1 step away from home
+        )
+        val redPlayer = Player(color = PlayerColor.RED, name = "Red P1", tokens = finishedTokens)
+        val greenPlayer = Player(color = PlayerColor.GREEN, name = "Green P2", tokens = List(4) { Token(id = it, color = PlayerColor.GREEN, position = TokenPosition.InBase) })
+        val yellowPlayer = Player(color = PlayerColor.YELLOW, name = "Yellow P3", tokens = List(4) { Token(id = it, color = PlayerColor.YELLOW, position = TokenPosition.InBase) })
+        val bluePlayer = Player(color = PlayerColor.BLUE, name = "Blue P4", tokens = List(4) { Token(id = it, color = PlayerColor.BLUE, position = TokenPosition.InBase) })
+
+        val state = GameState(
+            players = listOf(redPlayer, greenPlayer, yellowPlayer, bluePlayer),
+            currentTurnIndex = 0,
+            diceState = DiceState(value = 1),
+            phase = TurnPhase.SELECTING_TOKEN,
+            gameMode = GameMode.TEAM_2V2
+        )
+
+        val outcome = LudoEngine.executeMove(state, tokenId = 3)
+
+        // Red finished 4 tokens, but Team A only has 4/8 tokens home! Game should NOT be over!
+        assertFalse("Game should NOT be over when only 1 teammate completes 4 tokens in Team Mode", outcome.updatedState.isGameOver)
+
+        val updatedRed = outcome.updatedState.players[0]
+        assertTrue("Red isFinished should be true", updatedRed.isFinished)
+
+        // Next active player index must skip Red (index 0) and proceed clockwise
+        val nextActive = LudoEngine.getNextActivePlayerIndex(outcome.updatedState.players, 0)
+        assertEquals(1, nextActive) // Green
+        val afterGreen = LudoEngine.getNextActivePlayerIndex(outcome.updatedState.players, 1)
+        assertEquals(2, afterGreen) // Yellow (Red's partner)
+        val afterYellow = LudoEngine.getNextActivePlayerIndex(outcome.updatedState.players, 2)
+        assertEquals(3, afterYellow) // Blue
+        val afterBlue = LudoEngine.getNextActivePlayerIndex(outcome.updatedState.players, 3)
+        assertEquals(1, afterBlue) // Skips Red (0), wraps to Green (1)
+    }
+
+    @Test
+    fun test_teamMode_teamWinsWhenTotalEightTokensReachHome() {
+        // Red has all 4 tokens finished
+        val redTokens = List(4) { Token(id = it, color = PlayerColor.RED, position = TokenPosition.Finished) }
+        val redPlayer = Player(color = PlayerColor.RED, name = "Red P1", tokens = redTokens)
+
+        val greenPlayer = Player(color = PlayerColor.GREEN, name = "Green P2", tokens = List(4) { Token(id = it, color = PlayerColor.GREEN, position = TokenPosition.InBase) })
+
+        // Yellow has 3 finished tokens and 1 on step 55
+        val yellowTokens = listOf(
+            Token(id = 0, color = PlayerColor.YELLOW, position = TokenPosition.Finished),
+            Token(id = 1, color = PlayerColor.YELLOW, position = TokenPosition.Finished),
+            Token(id = 2, color = PlayerColor.YELLOW, position = TokenPosition.Finished),
+            Token(id = 3, color = PlayerColor.YELLOW, position = TokenPosition.OnBoard(step = 55))
+        )
+        val yellowPlayer = Player(color = PlayerColor.YELLOW, name = "Yellow P3", tokens = yellowTokens)
+
+        val bluePlayer = Player(color = PlayerColor.BLUE, name = "Blue P4", tokens = List(4) { Token(id = it, color = PlayerColor.BLUE, position = TokenPosition.InBase) })
+
+        val state = GameState(
+            players = listOf(redPlayer, greenPlayer, yellowPlayer, bluePlayer),
+            currentTurnIndex = 2, // Yellow's turn
+            diceState = DiceState(value = 1),
+            phase = TurnPhase.SELECTING_TOKEN,
+            gameMode = GameMode.TEAM_2V2
+        )
+
+        val outcome = LudoEngine.executeMove(state, tokenId = 3)
+
+        // Yellow finishes 4th token -> Team A has 8 tokens home -> Team A wins!
+        assertTrue("Game MUST be over when Team A achieves 8 finished tokens", outcome.updatedState.isGameOver)
+        assertEquals(4, outcome.updatedState.winnerPodium.size)
+        // Winning teammates (Red and Yellow) are in the podium as rank 1 winners
+        assertEquals(PlayerColor.RED, outcome.updatedState.winnerPodium[0].color)
+        assertEquals(PlayerColor.YELLOW, outcome.updatedState.winnerPodium[1].color)
+    }
+
+    @Test
+    fun test_teamMode_liveWinChancesStartsAtFiftyPercent() {
+        val red = Player(color = PlayerColor.RED, name = "Red")
+        val green = Player(color = PlayerColor.GREEN, name = "Green")
+        val yellow = Player(color = PlayerColor.YELLOW, name = "Yellow")
+        val blue = Player(color = PlayerColor.BLUE, name = "Blue")
+
+        val chances = LudoEngine.calculateLiveWinChances(listOf(red, green, yellow, blue), GameMode.TEAM_2V2)
+        chances.forEach { p ->
+            assertEquals("At game start, Team Mode win chance must be 50% for each player", 50, p.liveWinChancePercent)
+            assertEquals("50%", p.estimatedWinChanceText)
+        }
+    }
 }
+
+
 
 
 

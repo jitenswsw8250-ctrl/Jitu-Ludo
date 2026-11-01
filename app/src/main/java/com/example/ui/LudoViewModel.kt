@@ -10,6 +10,7 @@ import com.example.data.SettingsRepository
 import com.example.data.StatsRepository
 import com.example.logic.LudoEngine
 import com.example.model.AiDifficulty
+import com.example.model.AnimatedBackground
 import com.example.model.AnimationSpeed
 import com.example.model.BoardTheme
 import com.example.model.DiceState
@@ -22,6 +23,9 @@ import com.example.model.MatchPlayerSummary
 import com.example.model.Player
 import com.example.model.PlayerAvatar
 import com.example.model.PlayerColor
+import com.example.model.PlayerTeam
+import com.example.model.SoundPack
+import com.example.model.TalkingTokenEvent
 import com.example.model.TokenPosition
 import com.example.model.TurnPhase
 import com.example.sound.SoundManager
@@ -53,7 +57,11 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
             animationSpeed = settingsRepository.getAnimationSpeed(),
             currentSkin = settingsRepository.getSelectedSkin(),
             boardTheme = settingsRepository.getBoardTheme(),
-            aiDifficulty = settingsRepository.getAiDifficulty()
+            aiDifficulty = settingsRepository.getAiDifficulty(),
+            soundPack = settingsRepository.getSoundPack(),
+            soundVolume = settingsRepository.getSoundVolume(),
+            talkingTokensEnabled = settingsRepository.isTalkingTokensEnabled(),
+            animatedBackground = settingsRepository.getAnimatedBackground()
         )
     )
     val gameState: StateFlow<GameState> = _gameState.asStateFlow()
@@ -72,6 +80,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
     private var captureDismissJob: Job? = null
     private var moveJob: Job? = null
     private var reactionDismissJob: Job? = null
+    private var talkingTokenDismissJob: Job? = null
 
     @Volatile
     private var isActionLocked = false
@@ -80,6 +89,10 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
     private var hasRecordedGameCompletion = false
 
     init {
+        // Initialize sound manager with saved preferences
+        soundManager.setSoundPack(settingsRepository.getSoundPack())
+        soundManager.setVolume(settingsRepository.getSoundVolume())
+
         // Load persistent stats and match history
         _playerStats.value = statsRepository.getAllStats()
         _matchHistory.value = gameHistoryRepository.getHistory()
@@ -132,11 +145,15 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         autoMoveJob?.cancel()
         captureDismissJob?.cancel()
         moveJob?.cancel()
-        reactionDismissJob?.cancel()
+        clearActiveReaction()
         isActionLocked = false
         hasRecordedGameCompletion = false
 
-        val selectedColors = if (mode == GameMode.VS_COMPUTER) {
+        val selectedColors = if (mode == GameMode.TEAM_2V2) {
+            // Team A: Red + Yellow (sitting opposite), Team B: Green + Blue (sitting opposite)
+            // Clockwise turn order: Red -> Green -> Yellow -> Blue
+            listOf(PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE)
+        } else if (mode == GameMode.VS_COMPUTER) {
             when (playerCount) {
                 2 -> {
                     val opposite = when (humanColor) {
@@ -167,7 +184,15 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
 
         val players = selectedColors.map { color ->
             val isBot = (mode == GameMode.VS_COMPUTER && color != humanColor)
-            val fallbackDefault = if (isBot) "Bot ${color.title}" else "${color.title} Player"
+            val fallbackDefault = when (mode) {
+                GameMode.TEAM_2V2 -> when (color) {
+                    PlayerColor.RED -> "Team A (Red)"
+                    PlayerColor.YELLOW -> "Team A (Yellow)"
+                    PlayerColor.GREEN -> "Team B (Green)"
+                    PlayerColor.BLUE -> "Team B (Blue)"
+                }
+                else -> if (isBot) "Bot ${color.title}" else "${color.title} Player"
+            }
             val savedName = settingsRepository.getPlayerName(color, fallbackDefault)
             val name = customNames[color] ?: savedName
 
@@ -185,7 +210,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        val initialPlayers = LudoEngine.calculateLiveWinChances(players)
+        val initialPlayers = LudoEngine.calculateLiveWinChances(players, mode)
         val startingPlayerIndex = 0
         val startingPlayer = initialPlayers[startingPlayerIndex]
 
@@ -197,7 +222,11 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
             phase = TurnPhase.WAITING_FOR_ROLL,
             gameMode = mode,
             aiDifficulty = difficulty,
-            statusMessage = "${startingPlayer.name}'s turn. Roll the dice!",
+            statusMessage = if (mode == GameMode.TEAM_2V2) {
+                "${startingPlayer.name}'s turn [${startingPlayer.team.title}]. Roll the dice!"
+            } else {
+                "${startingPlayer.name}'s turn. Roll the dice!"
+            },
             movableTokenIds = emptySet(),
             winnerPodium = emptyList(),
             isGameOver = false,
@@ -210,7 +239,12 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
             matchStartTimeMs = System.currentTimeMillis(),
             matchDurationSeconds = 0L,
             activeReaction = null,
-            extraTurnReason = null
+            extraTurnReason = null,
+            soundPack = settingsRepository.getSoundPack(),
+            soundVolume = settingsRepository.getSoundVolume(),
+            talkingTokensEnabled = settingsRepository.isTalkingTokensEnabled(),
+            animatedBackground = settingsRepository.getAnimatedBackground(),
+            talkingTokenEvent = null
         )
 
         _gameState.value = newState
@@ -265,21 +299,37 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 soundManager.playDiceRoll(state.soundEnabled, state.hapticsEnabled)
 
-                // Rapid tumble animation
+                // Realistic 3D rolling tumble animation (~720ms: 12 steps * 60ms)
                 val curPlayerConsecutive = _gameState.value.currentPlayer?.consecutiveSixes
                     ?: _gameState.value.diceState.consecutiveSixes
                 val maxTumble = if (curPlayerConsecutive >= 2) 6 else 7
-                repeat(4) {
+                repeat(12) {
                     _gameState.update {
                         it.copy(diceState = it.diceState.copy(value = Random.nextInt(1, maxTumble)))
                     }
-                    delay(35)
+                    delay(60)
                 }
 
                 // Final roll resolution: strictly 1..5 if on third consecutive roll
                 val finalRoll = if (curPlayerConsecutive >= 2) Random.nextInt(1, 6) else Random.nextInt(1, 7)
                 val updatedState = LudoEngine.rollDice(_gameState.value, forcedRoll = finalRoll)
-                _gameState.value = updatedState
+                _gameState.update { current ->
+                    updatedState.copy(
+                        activeReaction = current.activeReaction,
+                        talkingTokenEvent = current.talkingTokenEvent
+                    )
+                }
+
+                // Talking tokens: celebrate lucky 6 roll!
+                if (finalRoll == 6 && updatedState.talkingTokensEnabled) {
+                    val targetTokenId = updatedState.movableTokenIds.firstOrNull() ?: 0
+                    triggerTalkingToken(
+                        tokenId = targetTokenId,
+                        color = updatedState.currentPlayer?.color ?: PlayerColor.RED,
+                        phrase = "Lucky 6! 🌟",
+                        emoji = "🎲"
+                    )
+                }
 
                 // Auto-save game state after dice roll
                 if (!updatedState.isGameOver) {
@@ -426,14 +476,30 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         when {
             outcome.capturedToken != null -> {
                 soundManager.playCapture(startState.soundEnabled, startState.hapticsEnabled)
+                if (startState.talkingTokensEnabled) {
+                    val taunts = listOf("Gotcha! 💥", "See ya! 👋", "Boom! 🎯")
+                    triggerTalkingToken(tokenId, player.color, taunts.random(), "⚔️")
+                }
             }
             outcome.updatedState.isGameOver -> {
                 if (!hasRecordedGameCompletion) {
                     soundManager.playVictory(startState.soundEnabled, startState.hapticsEnabled)
                 }
+                if (startState.talkingTokensEnabled) {
+                    triggerTalkingToken(tokenId, player.color, "Champions! 👑", "🏆")
+                }
             }
             outcome.bonusReason?.contains("Home") == true -> {
                 soundManager.playHomeSafe(startState.soundEnabled, startState.hapticsEnabled)
+                if (startState.talkingTokensEnabled) {
+                    val cheers = listOf("Home safe! 🏆", "Made it! 👑", "Star power! ⭐")
+                    triggerTalkingToken(tokenId, player.color, cheers.random(), "🏰")
+                }
+            }
+            token.position is TokenPosition.InBase -> {
+                if (startState.talkingTokensEnabled) {
+                    triggerTalkingToken(tokenId, player.color, "Let's roll! 🚀", "🏃")
+                }
             }
         }
 
@@ -444,7 +510,12 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
             outcome.updatedState
         }
 
-        _gameState.value = finalState
+        _gameState.update { current ->
+            finalState.copy(
+                activeReaction = current.activeReaction,
+                talkingTokenEvent = current.talkingTokenEvent
+            )
+        }
 
         // Bot reactions based on move outcome
         if (player.isBot && outcome.capturedToken != null) {
@@ -467,7 +538,12 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
             val winner = finalState.winnerPodium.firstOrNull() ?: finalState.players.firstOrNull()
             if (winner != null) {
                 // Update persistent player records
-                statsRepository.recordCompletedGame(finalState.players, winner)
+                val winningColors = if (finalState.gameMode == GameMode.TEAM_2V2) {
+                    finalState.players.filter { it.team == winner.team }.map { it.color }.toSet()
+                } else {
+                    setOf(winner.color)
+                }
+                statsRepository.recordCompletedGame(finalState.players, winner, winningColors)
                 _playerStats.value = statsRepository.getAllStats()
 
                 // Save completed match to local game history
@@ -484,13 +560,20 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
 
+                val displayWinnerName = if (finalState.gameMode == GameMode.TEAM_2V2) {
+                    val winningTeammates = finalState.players.filter { it.team == winner.team }
+                    "${winner.team.title} (${winningTeammates.joinToString(" & ") { it.name }})"
+                } else {
+                    winner.name
+                }
+
                 val historyRecord = MatchHistoryRecord(
                     id = finalState.matchId,
                     timestampMs = System.currentTimeMillis(),
                     formattedDate = formattedDate,
                     gameMode = finalState.gameMode,
                     aiDifficulty = if (finalState.gameMode == GameMode.VS_COMPUTER) finalState.aiDifficulty else null,
-                    winnerName = winner.name,
+                    winnerName = displayWinnerName,
                     winnerColor = winner.color,
                     winnerAvatar = winner.avatar,
                     durationSeconds = finalState.matchDurationSeconds,
@@ -539,6 +622,24 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshStats() {
         _playerStats.value = statsRepository.getAllStats()
+    }
+
+    fun updatePlayerProfile(color: PlayerColor, name: String, avatar: PlayerAvatar) {
+        settingsRepository.setPlayerName(color, name)
+        settingsRepository.setPlayerAvatar(color, avatar)
+        _gameState.update { current ->
+            val updatedPlayers = current.players.map { p ->
+                if (p.color == color) {
+                    p.copy(name = name, avatar = avatar)
+                } else p
+            }
+            current.copy(players = updatedPlayers)
+        }
+        _playerStats.value = statsRepository.getAllStats()
+    }
+
+    fun getProfileStats(color: PlayerColor, name: String, isBot: Boolean = false): PlayerStatsRecord {
+        return statsRepository.getStatsForPlayer(color, name, isBot)
     }
 
     fun clearMatchHistory() {
@@ -700,19 +801,106 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         triggerReaction(emoji, sender.name, sender.color)
     }
 
+    fun clearActiveReaction() {
+        reactionDismissJob?.cancel()
+        reactionDismissJob = null
+        _gameState.update {
+            if (it.activeReaction != null) it.copy(activeReaction = null) else it
+        }
+    }
+
     fun triggerReaction(emoji: String, senderName: String, senderColor: PlayerColor) {
         reactionDismissJob?.cancel()
+        val now = System.currentTimeMillis()
         val event = EmojiReactionEvent(
+            id = System.nanoTime(),
             emoji = emoji,
             senderName = senderName,
-            senderColor = senderColor
+            senderColor = senderColor,
+            timestampMs = now,
+            expiresAtMs = now + 1500L
         )
         _gameState.update { it.copy(activeReaction = event) }
         reactionDismissJob = viewModelScope.launch {
-            delay(2400)
-            _gameState.update {
-                if (it.activeReaction?.id == event.id) it.copy(activeReaction = null) else it
+            delay(1500L)
+            _gameState.update { current ->
+                if (current.activeReaction?.id == event.id) current.copy(activeReaction = null) else current
             }
+        }
+    }
+
+    fun triggerTalkingToken(tokenId: Int, color: PlayerColor, phrase: String, emoji: String) {
+        if (!_gameState.value.talkingTokensEnabled) return
+        talkingTokenDismissJob?.cancel()
+        val event = TalkingTokenEvent(
+            tokenId = tokenId,
+            color = color,
+            phrase = phrase,
+            emoji = emoji
+        )
+        _gameState.update { it.copy(talkingTokenEvent = event) }
+        soundManager.playTalkingToken(phrase, _gameState.value.soundEnabled)
+        talkingTokenDismissJob = viewModelScope.launch {
+            delay(2000)
+            _gameState.update {
+                if (it.talkingTokenEvent?.id == event.id) it.copy(talkingTokenEvent = null) else it
+            }
+        }
+    }
+
+    fun setSoundPack(pack: SoundPack) {
+        settingsRepository.setSoundPack(pack)
+        soundManager.setSoundPack(pack)
+        _gameState.update { it.copy(soundPack = pack) }
+    }
+
+    fun setSoundVolume(volume: Float) {
+        val vol = volume.coerceIn(0.0f, 1.0f)
+        settingsRepository.setSoundVolume(vol)
+        soundManager.setVolume(vol)
+        _gameState.update { it.copy(soundVolume = vol) }
+    }
+
+    fun toggleTalkingTokens() {
+        val next = !_gameState.value.talkingTokensEnabled
+        settingsRepository.setTalkingTokensEnabled(next)
+        _gameState.update { it.copy(talkingTokensEnabled = next) }
+    }
+
+    fun setAnimatedBackground(bg: AnimatedBackground) {
+        settingsRepository.setAnimatedBackground(bg)
+        _gameState.update { it.copy(animatedBackground = bg) }
+    }
+
+    fun previewSoundPack(pack: SoundPack) {
+        soundManager.playSoundPreview(pack, _gameState.value.soundEnabled)
+    }
+
+    fun resetSettingsToDefaults() {
+        settingsRepository.resetToDefaults()
+        soundManager.setSoundPack(SoundPack.CLASSIC)
+        soundManager.setVolume(1.0f)
+        _gameState.update {
+            it.copy(
+                soundEnabled = true,
+                hapticsEnabled = true,
+                animationSpeed = AnimationSpeed.NORMAL,
+                currentSkin = GameSkin.CLASSIC,
+                boardTheme = BoardTheme.CLASSIC,
+                aiDifficulty = AiDifficulty.MEDIUM,
+                soundPack = SoundPack.CLASSIC,
+                soundVolume = 1.0f,
+                talkingTokensEnabled = true,
+                animatedBackground = AnimatedBackground.ROYAL_PALACE
+            )
+        }
+    }
+
+    fun saveActiveGameNow() {
+        val state = _gameState.value
+        if (!state.isGameOver) {
+            gameStateRepository.saveActiveGame(state)
+            _hasSavedGame.value = true
         }
     }
 
@@ -723,6 +911,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         captureDismissJob?.cancel()
         moveJob?.cancel()
         reactionDismissJob?.cancel()
+        talkingTokenDismissJob?.cancel()
         soundManager.release()
     }
 }

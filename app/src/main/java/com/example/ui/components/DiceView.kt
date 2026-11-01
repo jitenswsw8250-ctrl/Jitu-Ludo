@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -524,6 +525,8 @@ fun DiceFace(
 ) {
     val rotationZ = remember { Animatable(0f) }
     val rotationX = remember { Animatable(0f) }
+    val rotationY = remember { Animatable(0f) }
+    val bounceY = remember { Animatable(0f) }
     val scale = remember { Animatable(1f) }
 
     val infiniteTransition = rememberInfiniteTransition(label = "sixGlowPulse")
@@ -539,14 +542,37 @@ fun DiceFace(
 
     LaunchedEffect(isRolling) {
         if (isRolling) {
-            rotationZ.animateTo(
-                targetValue = rotationZ.value + 360f,
-                animationSpec = tween(durationMillis = 320, easing = LinearEasing)
-            )
-            rotationX.animateTo(25f, tween(160, easing = FastOutSlowInEasing))
-            rotationX.animateTo(0f, tween(160, easing = FastOutSlowInEasing))
-            scale.animateTo(1.15f, tween(160))
-            scale.animateTo(1.0f, tween(160))
+            launch {
+                rotationZ.animateTo(
+                    targetValue = rotationZ.value + 720f,
+                    animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing)
+                )
+            }
+            launch {
+                rotationX.animateTo(
+                    targetValue = rotationX.value + 540f,
+                    animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing)
+                )
+            }
+            launch {
+                rotationY.animateTo(
+                    targetValue = rotationY.value + 360f,
+                    animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing)
+                )
+            }
+            launch {
+                // Realistic physical bounce: lift into air, tumble, drop with slight rebound & smooth settle
+                bounceY.animateTo(-16f, tween(180, easing = FastOutSlowInEasing))
+                bounceY.animateTo(-6f, tween(200, easing = LinearEasing))
+                bounceY.animateTo(-10f, tween(120, easing = FastOutSlowInEasing))
+                bounceY.animateTo(0f, tween(200, easing = FastOutSlowInEasing))
+            }
+            launch {
+                scale.animateTo(1.18f, tween(200, easing = FastOutSlowInEasing))
+                scale.animateTo(1.08f, tween(250, easing = LinearEasing))
+                scale.animateTo(0.94f, tween(120, easing = FastOutSlowInEasing))
+                scale.animateTo(1.0f, tween(130, easing = FastOutSlowInEasing))
+            }
         }
     }
 
@@ -559,7 +585,9 @@ fun DiceFace(
             .graphicsLayer {
                 this.rotationZ = rotationZ.value
                 this.rotationX = rotationX.value
-                this.cameraDistance = 12f * density
+                this.rotationY = rotationY.value
+                this.translationY = bounceY.value * density
+                this.cameraDistance = 16f * density
             }
             .clip(RoundedCornerShape(12.dp))
             .clickable(
@@ -601,7 +629,7 @@ fun DiceFace(
                 cornerRadius = CornerRadius(corner, corner)
             )
 
-            // 2. Outer Bezel Border (Skin customized)
+            // 2. Outer Bezel Border (All 11 skins supported)
             val bezelColors = when (skin) {
                 GameSkin.CLASSIC -> listOf(Color(0xFF1E3A8A), Color(0xFF0F172A), Color(0xFF1E3A8A))
                 GameSkin.RUBY -> listOf(Color(0xFF9F1239), Color(0xFF4C0519), Color(0xFF9F1239))
@@ -609,6 +637,11 @@ fun DiceFace(
                 GameSkin.SAPPHIRE -> listOf(Color(0xFF1E40AF), Color(0xFF0F172A), Color(0xFF1E40AF))
                 GameSkin.GOLD -> listOf(Color(0xFFB45309), Color(0xFF451A03), Color(0xFFB45309))
                 GameSkin.SILVER -> listOf(Color(0xFF475569), Color(0xFF0F172A), Color(0xFF475569))
+                GameSkin.DIAMOND -> listOf(Color(0xFF0369A1), Color(0xFF082F49), Color(0xFF0369A1))
+                GameSkin.FIRE -> listOf(Color(0xFF9A3412), Color(0xFF431407), Color(0xFF9A3412))
+                GameSkin.ICE -> listOf(Color(0xFF155E75), Color(0xFF083344), Color(0xFF155E75))
+                GameSkin.ROYAL_GOLD -> listOf(Color(0xFF78350F), Color(0xFF451A03), Color(0xFF78350F))
+                GameSkin.RAINBOW -> listOf(Color(0xFF6B21A8), Color(0xFF312E81), Color(0xFF6B21A8))
             }
             drawRoundRect(
                 brush = Brush.linearGradient(
@@ -621,7 +654,7 @@ fun DiceFace(
                 cornerRadius = CornerRadius(corner, corner)
             )
 
-            // 3. Die Face Base with 3D gradient
+            // 3. Die Face Base with 3D gradient (All 11 skins supported)
             val innerPad = pad * 1.8f
             val faceColors = when (skin) {
                 GameSkin.CLASSIC -> listOf(Color(0xFFFFFBEB), Color(0xFFFDE68A), Color(0xFFF59E0B), Color(0xFFD97706))
@@ -630,6 +663,11 @@ fun DiceFace(
                 GameSkin.SAPPHIRE -> listOf(Color(0xFFEFF6FF), Color(0xFFBAE6FD), Color(0xFF38BDF8), Color(0xFF0284C7))
                 GameSkin.GOLD -> listOf(Color(0xFFFEFCE8), Color(0xFFFEF08A), Color(0xFFFACC15), Color(0xFFCA8A04))
                 GameSkin.SILVER -> listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9), Color(0xFFCBD5E1), Color(0xFF64748B))
+                GameSkin.DIAMOND -> listOf(Color(0xFFF0F9FF), Color(0xFFBAE6FD), Color(0xFF38BDF8), Color(0xFF0284C7))
+                GameSkin.FIRE -> listOf(Color(0xFFFFFBEB), Color(0xFFFDE047), Color(0xFFEA580C), Color(0xFF9A3412))
+                GameSkin.ICE -> listOf(Color(0xFFECFEFF), Color(0xFFA5F3FC), Color(0xFF06B6D4), Color(0xFF0E7490))
+                GameSkin.ROYAL_GOLD -> listOf(Color(0xFFFFFBEB), Color(0xFFFDE047), Color(0xFFF59E0B), Color(0xFFB45309))
+                GameSkin.RAINBOW -> listOf(Color(0xFFFDF4FF), Color(0xFFF472B6), Color(0xFFA855F7), Color(0xFF6366F1))
             }
 
             drawRoundRect(
@@ -640,6 +678,28 @@ fun DiceFace(
                 size = Size(dSize - innerPad * 2, dSize - innerPad * 2),
                 cornerRadius = CornerRadius(corner * 0.8f, corner * 0.8f)
             )
+
+            // Lucky 6 Celebration: Corner Sparkle Star Bursts
+            if (isSixRolled) {
+                val sparkleOffsets = listOf(
+                    Offset(pad * 0.8f, pad * 0.8f),
+                    Offset(dSize - pad * 0.8f, pad * 0.8f),
+                    Offset(pad * 0.8f, dSize - pad * 0.8f),
+                    Offset(dSize - pad * 0.8f, dSize - pad * 0.8f)
+                )
+                for (sp in sparkleOffsets) {
+                    drawCircle(
+                        color = Color(0xFFFFFBEB).copy(alpha = sixGlowAlpha),
+                        radius = dSize * 0.055f,
+                        center = sp
+                    )
+                    drawCircle(
+                        color = Color(0xFFFFD700).copy(alpha = sixGlowAlpha * 0.7f),
+                        radius = dSize * 0.09f,
+                        center = sp
+                    )
+                }
+            }
 
             // 4. Inner Rim Bevel Stroke
             val rimStrokeColor = if (isSixRolled) Color(0xFFFFD700) else Color.White.copy(alpha = 0.85f)
@@ -677,9 +737,17 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPips(
     val pipColor = if (isSix) Color(0xFFDC2626) else Color(0xFF1E293B)
 
     fun pip(x: Float, y: Float) {
+        if (!isSix) {
+            // Subtle luminous pip accent for numbers 1-5
+            drawCircle(
+                color = accentColor.copy(alpha = 0.25f),
+                radius = pipRadius * 1.35f,
+                center = Offset(x, y)
+            )
+        }
         drawCircle(color = pipColor, radius = pipRadius, center = Offset(x, y))
         // Subtle shiny reflection in center of pip
-        drawCircle(color = Color.White.copy(alpha = 0.45f), radius = pipRadius * 0.35f, center = Offset(x - pipRadius * 0.2f, y - pipRadius * 0.2f))
+        drawCircle(color = Color.White.copy(alpha = 0.55f), radius = pipRadius * 0.35f, center = Offset(x - pipRadius * 0.2f, y - pipRadius * 0.2f))
     }
 
     when (value) {

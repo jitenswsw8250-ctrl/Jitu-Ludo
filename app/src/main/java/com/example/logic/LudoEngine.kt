@@ -2,9 +2,11 @@ package com.example.logic
 
 import com.example.model.CaptureAnimationEvent
 import com.example.model.DiceState
+import com.example.model.GameMode
 import com.example.model.GameState
 import com.example.model.Player
 import com.example.model.PlayerColor
+import com.example.model.PlayerTeam
 import com.example.model.Token
 import com.example.model.TokenPosition
 import com.example.model.TurnPhase
@@ -19,6 +21,15 @@ data class MoveOutcome(
 )
 
 object LudoEngine {
+
+    /**
+     * Determines whether two player colors belong to the same team in 2 vs 2 Team Mode:
+     * - Team A: Red + Yellow (opposite partners)
+     * - Team B: Green + Blue (opposite partners)
+     */
+    fun isTeammate(color1: PlayerColor, color2: PlayerColor): Boolean {
+        return PlayerTeam.forColor(color1) == PlayerTeam.forColor(color2)
+    }
 
     /**
      * Determines whether a given token can move with the given dice roll.
@@ -160,6 +171,11 @@ object LudoEngine {
                     val otherPlayer = updatedPlayers[i]
                     if (otherPlayer.color == player.color || otherPlayer.isFinished) continue
 
+                    // In 2 vs 2 Team Mode: teammates cannot capture each other!
+                    if (state.gameMode == GameMode.TEAM_2V2 && isTeammate(player.color, otherPlayer.color)) {
+                        continue
+                    }
+
                     var capturedInThisPlayer = false
                     val modifiedOtherTokens = otherPlayer.tokens.map { t ->
                         val tStep = (t.position as? TokenPosition.OnBoard)?.step
@@ -198,15 +214,37 @@ object LudoEngine {
             }
         }
 
-        // Check player victory status
+        // Check player / team victory status
         val podium = state.winnerPodium.toMutableList()
         val currentPlayerIndex = updatedPlayers.indexOfFirst { it.color == player.color }
         val playerAllHome = updatedPlayers[currentPlayerIndex].isFinished
 
-        if (playerAllHome && updatedPlayers[currentPlayerIndex].rank == null) {
-            val rank = podium.size + 1
-            updatedPlayers[currentPlayerIndex] = updatedPlayers[currentPlayerIndex].copy(rank = rank)
-            podium.add(updatedPlayers[currentPlayerIndex])
+        // In 2 vs 2 Team Mode: 8 tokens total per team to win!
+        val teamAFinished = updatedPlayers.filter { it.team == PlayerTeam.TEAM_A }.sumOf { it.finishedTokensCount } >= 8
+        val teamBFinished = updatedPlayers.filter { it.team == PlayerTeam.TEAM_B }.sumOf { it.finishedTokensCount } >= 8
+
+        val isGameOver = if (state.gameMode == GameMode.TEAM_2V2) {
+            teamAFinished || teamBFinished
+        } else {
+            val activeRemaining = updatedPlayers.count { !it.isFinished }
+            (updatedPlayers.size == 2 && podium.isNotEmpty()) || (activeRemaining <= 1)
+        }
+
+        if (state.gameMode == GameMode.TEAM_2V2) {
+            if (isGameOver) {
+                val winningTeam = if (teamAFinished) PlayerTeam.TEAM_A else PlayerTeam.TEAM_B
+                podium.clear()
+                val winners = updatedPlayers.filter { it.team == winningTeam }.map { it.copy(rank = 1) }
+                val runnersUp = updatedPlayers.filter { it.team != winningTeam }.map { it.copy(rank = 2) }
+                podium.addAll(winners)
+                podium.addAll(runnersUp)
+            }
+        } else {
+            if (playerAllHome && updatedPlayers[currentPlayerIndex].rank == null) {
+                val rank = podium.size + 1
+                updatedPlayers[currentPlayerIndex] = updatedPlayers[currentPlayerIndex].copy(rank = rank)
+                podium.add(updatedPlayers[currentPlayerIndex])
+            }
         }
 
         // Determine bonus turn
@@ -226,10 +264,6 @@ object LudoEngine {
             }
         }
 
-        // Check game over (e.g. only 1 active player left or 2-player game winner)
-        val activeRemaining = updatedPlayers.count { !it.isFinished }
-        val isGameOver = (updatedPlayers.size == 2 && podium.isNotEmpty()) || (activeRemaining <= 1)
-
         val nextTurnIndex = if (bonusTurn && !playerAllHome) {
             state.currentTurnIndex
         } else {
@@ -238,7 +272,14 @@ object LudoEngine {
 
         val nextPlayer = updatedPlayers[nextTurnIndex]
         val statusMsg = when {
-            isGameOver -> "Game Over! ${podium.firstOrNull()?.name ?: "Winner"} wins the crown!"
+            isGameOver -> {
+                if (state.gameMode == GameMode.TEAM_2V2) {
+                    val winningTeamTitle = if (teamAFinished) "Team A (Red & Yellow)" else "Team B (Green & Blue)"
+                    "Game Over! $winningTeamTitle wins the Team Championship! 🏆"
+                } else {
+                    "Game Over! ${podium.firstOrNull()?.name ?: "Winner"} wins the crown!"
+                }
+            }
             bonusTurn -> "${player.name} gets a bonus turn! ($bonusReason)"
             else -> "${player.name} moved. Next is ${nextPlayer.name}'s turn."
         }
@@ -289,7 +330,7 @@ object LudoEngine {
             }
         }
 
-        val playersWithWinChances = calculateLiveWinChances(playersWithConsecutiveTracked)
+        val playersWithWinChances = calculateLiveWinChances(playersWithConsecutiveTracked, state.gameMode)
 
         val newState = state.copy(
             players = playersWithWinChances,
@@ -504,8 +545,64 @@ object LudoEngine {
      * As tokens advance, safe squares are reached, captures are made, or tokens enter home,
      * the live probability updates dynamically and normalizes to approximately 100%.
      */
-    fun calculateLiveWinChances(players: List<Player>): List<Player> {
+    fun calculateLiveWinChances(players: List<Player>, gameMode: GameMode = GameMode.LOCAL_MULTIPLAYER): List<Player> {
         if (players.isEmpty()) return players
+
+        // Special handling for 2 vs 2 Team Mode:
+        if (gameMode == GameMode.TEAM_2V2) {
+            val teamAFinished = players.filter { it.team == PlayerTeam.TEAM_A }.sumOf { p -> p.tokens.count { it.isFinished } } >= 8
+            val teamBFinished = players.filter { it.team == PlayerTeam.TEAM_B }.sumOf { p -> p.tokens.count { it.isFinished } } >= 8
+            if (teamAFinished || teamBFinished) {
+                val winningTeam = if (teamAFinished) PlayerTeam.TEAM_A else PlayerTeam.TEAM_B
+                return players.map { p ->
+                    val isWinner = p.team == winningTeam
+                    p.copy(
+                        liveWinChancePercent = if (isWinner) 100 else 0,
+                        estimatedWinChanceText = if (isWinner) "100%" else "0%"
+                    )
+                }
+            }
+
+            val isGameStart = players.all { p ->
+                p.tokens.all { it.isInBase } && p.captures == 0 && p.losses == 0
+            }
+            if (isGameStart) {
+                return players.map { it.copy(liveWinChancePercent = 50, estimatedWinChanceText = "50%") }
+            }
+
+            val playerScores = players.associateWith { player ->
+                var score = 5.0
+                for (token in player.tokens) {
+                    when (val pos = token.position) {
+                        is TokenPosition.InBase -> {}
+                        is TokenPosition.OnBoard -> {
+                            score += 15.0
+                            score += pos.step * 1.5
+                            if (LudoBoardMap.isSafeSquare(player.color, pos.step)) score += 5.0
+                            if (pos.step in 51..55) score += 15.0
+                        }
+                        is TokenPosition.Finished -> score += 85.0
+                    }
+                }
+                score += player.captures * 15.0
+                score -= player.losses * 3.0
+                score.coerceAtLeast(1.0)
+            }
+
+            val teamAScore = players.filter { it.team == PlayerTeam.TEAM_A }.sumOf { playerScores[it] ?: 5.0 }
+            val teamBScore = players.filter { it.team == PlayerTeam.TEAM_B }.sumOf { playerScores[it] ?: 5.0 }
+            val totalScore = teamAScore + teamBScore
+            val teamAPct = if (totalScore > 0) ((teamAScore / totalScore) * 100.0).toInt().coerceIn(5, 95) else 50
+            val teamBPct = 100 - teamAPct
+
+            return players.map { p ->
+                val pct = if (p.team == PlayerTeam.TEAM_A) teamAPct else teamBPct
+                p.copy(
+                    liveWinChancePercent = pct,
+                    estimatedWinChanceText = "$pct%"
+                )
+            }
+        }
 
         // If a player has finished all tokens, they are the confirmed winner (100%)
         val winner = players.firstOrNull { it.isFinished }

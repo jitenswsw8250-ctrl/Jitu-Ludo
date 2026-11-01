@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.example.logic.LudoEngine
 import com.example.model.AiDifficulty
+import com.example.model.AnimatedBackground
 import com.example.model.AnimationSpeed
 import com.example.model.BoardTheme
 import com.example.model.DiceState
@@ -13,6 +14,7 @@ import com.example.model.GameState
 import com.example.model.Player
 import com.example.model.PlayerAvatar
 import com.example.model.PlayerColor
+import com.example.model.SoundPack
 import com.example.model.Token
 import com.example.model.TokenPosition
 import com.example.model.TurnPhase
@@ -59,6 +61,10 @@ class GameStateRepository(context: Context) {
                 put("animationSpeed", state.animationSpeed.name)
                 put("soundEnabled", state.soundEnabled)
                 put("hapticsEnabled", state.hapticsEnabled)
+                put("soundPack", state.soundPack.id)
+                put("soundVolume", state.soundVolume.toDouble())
+                put("talkingTokensEnabled", state.talkingTokensEnabled)
+                put("animatedBackground", state.animatedBackground.id)
                 put("matchStartTimeMs", state.matchStartTimeMs)
 
                 // Dice state (ensure isRolling is false so game never restores frozen)
@@ -135,6 +141,12 @@ class GameStateRepository(context: Context) {
             val animationSpeed = runCatching { AnimationSpeed.valueOf(speedName) }.getOrDefault(AnimationSpeed.NORMAL)
             val soundEnabled = root.optBoolean("soundEnabled", true)
             val hapticsEnabled = root.optBoolean("hapticsEnabled", true)
+            val soundPackId = root.optString("soundPack", SoundPack.CLASSIC.id)
+            val soundPack = SoundPack.fromId(soundPackId)
+            val soundVolume = root.optDouble("soundVolume", 1.0).toFloat().coerceIn(0.0f, 1.0f)
+            val talkingTokensEnabled = root.optBoolean("talkingTokensEnabled", true)
+            val animatedBgId = root.optString("animatedBackground", AnimatedBackground.ROYAL_PALACE.id)
+            val animatedBackground = AnimatedBackground.fromId(animatedBgId)
             val matchStartTimeMs = root.optLong("matchStartTimeMs", System.currentTimeMillis())
 
             val diceObj = root.optJSONObject("diceState")
@@ -227,7 +239,11 @@ class GameStateRepository(context: Context) {
                 currentSkin = currentSkin,
                 boardTheme = boardTheme,
                 animationSpeed = animationSpeed,
-                matchStartTimeMs = matchStartTimeMs
+                matchStartTimeMs = matchStartTimeMs,
+                soundPack = soundPack,
+                soundVolume = soundVolume,
+                talkingTokensEnabled = talkingTokensEnabled,
+                animatedBackground = animatedBackground
             )
         } catch (_: Exception) {
             clearActiveGame()

@@ -12,6 +12,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
+import com.example.model.SoundPack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,8 +28,8 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * SoundManager provides low-latency, reliable sound effects and haptic feedback
- * for Jitu Ludo on Android devices and the cloud streaming preview.
+ * SoundManager provides low-latency, reliable sound effects, sound packs (Classic, Royal, Fun),
+ * volume scaling, talking token voices, and haptic feedback for Jitu Ludo.
  *
  * Implements a 3-tier audio playback pipeline:
  * 1. SoundPool with synthesized 44.1kHz PCM WAV files in app cache.
@@ -50,13 +51,25 @@ class SoundManager(private val context: Context) {
         TOKEN_HOME,
         VICTORY,
         BUTTON_CLICK,
-        TURN_CHANGE
+        TURN_CHANGE,
+        TALK_STEP,
+        TALK_CAPTURE,
+        TALK_SIX,
+        TALK_HOME
     }
 
+    private data class SoundKey(val pack: SoundPack, val type: SoundType)
+
+    @Volatile
+    var currentSoundPack: SoundPack = SoundPack.CLASSIC
+
+    @Volatile
+    var masterVolume: Float = 1.0f
+
     private var soundPool: SoundPool? = null
-    private val soundIds = ConcurrentHashMap<SoundType, Int>()
+    private val soundIds = ConcurrentHashMap<SoundKey, Int>()
     private val loadedSoundIds = ConcurrentHashMap.newKeySet<Int>()
-    private val pcmBuffers = ConcurrentHashMap<SoundType, ShortArray>()
+    private val pcmBuffers = ConcurrentHashMap<SoundKey, ShortArray>()
 
     private val vibrator: Vibrator? by lazy {
         try {
@@ -76,10 +89,16 @@ class SoundManager(private val context: Context) {
         initAudioEngine()
     }
 
+    fun setSoundPack(pack: SoundPack) {
+        currentSoundPack = pack
+    }
+
+    fun setVolume(volume: Float) {
+        masterVolume = volume.coerceIn(0.0f, 1.0f)
+    }
+
     /**
      * Checks if the device media volume is currently audible (> 0).
-     * If the user sets media volume to 0 or mutes the stream, game sounds remain inaudible
-     * without ever modifying or raising the user's system volume settings.
      */
     private fun isMediaVolumeAudible(): Boolean {
         return try {
@@ -94,32 +113,58 @@ class SoundManager(private val context: Context) {
     private fun initAudioEngine() {
         scope.launch(Dispatchers.IO) {
             try {
-                // 1. Synthesize all audio buffers in-memory
-                pcmBuffers[SoundType.DICE_ROLL] = synthesizeDiceRoll()
-                pcmBuffers[SoundType.TOKEN_MOVE] = synthesizeTokenMove()
-                pcmBuffers[SoundType.TOKEN_CAPTURE] = synthesizeTokenCapture()
-                pcmBuffers[SoundType.TOKEN_HOME] = synthesizeTokenHome()
-                pcmBuffers[SoundType.VICTORY] = synthesizeVictoryFanfare()
-                pcmBuffers[SoundType.BUTTON_CLICK] = synthesizeButtonClick()
-                pcmBuffers[SoundType.TURN_CHANGE] = synthesizeTurnChange()
+                // 1. Synthesize all audio buffers in-memory for all sound packs
+                for (pack in SoundPack.values()) {
+                    pcmBuffers[SoundKey(pack, SoundType.DICE_ROLL)] = when (pack) {
+                        SoundPack.CLASSIC -> synthesizeDiceRoll()
+                        SoundPack.ROYAL -> synthesizeRoyalDiceRoll()
+                        SoundPack.FUN -> synthesizeFunDiceRoll()
+                    }
+                    pcmBuffers[SoundKey(pack, SoundType.TOKEN_MOVE)] = when (pack) {
+                        SoundPack.CLASSIC -> synthesizeTokenMove()
+                        SoundPack.ROYAL -> synthesizeRoyalTokenMove()
+                        SoundPack.FUN -> synthesizeFunTokenMove()
+                    }
+                    pcmBuffers[SoundKey(pack, SoundType.TOKEN_CAPTURE)] = when (pack) {
+                        SoundPack.CLASSIC -> synthesizeTokenCapture()
+                        SoundPack.ROYAL -> synthesizeRoyalTokenCapture()
+                        SoundPack.FUN -> synthesizeFunTokenCapture()
+                    }
+                    pcmBuffers[SoundKey(pack, SoundType.TOKEN_HOME)] = when (pack) {
+                        SoundPack.CLASSIC -> synthesizeTokenHome()
+                        SoundPack.ROYAL -> synthesizeRoyalTokenHome()
+                        SoundPack.FUN -> synthesizeFunTokenHome()
+                    }
+                    pcmBuffers[SoundKey(pack, SoundType.VICTORY)] = when (pack) {
+                        SoundPack.CLASSIC -> synthesizeVictoryFanfare()
+                        SoundPack.ROYAL -> synthesizeRoyalVictoryFanfare()
+                        SoundPack.FUN -> synthesizeFunVictoryFanfare()
+                    }
+                    // Common UI
+                    pcmBuffers[SoundKey(pack, SoundType.BUTTON_CLICK)] = synthesizeButtonClick()
+                    pcmBuffers[SoundKey(pack, SoundType.TURN_CHANGE)] = synthesizeTurnChange()
 
-                // 2. Build SoundPool with USAGE_GAME and CONTENT_TYPE_SONIFICATION
+                    // Talking token sounds
+                    pcmBuffers[SoundKey(pack, SoundType.TALK_STEP)] = synthesizeTalkStep()
+                    pcmBuffers[SoundKey(pack, SoundType.TALK_CAPTURE)] = synthesizeTalkCapture()
+                    pcmBuffers[SoundKey(pack, SoundType.TALK_SIX)] = synthesizeTalkSix()
+                    pcmBuffers[SoundKey(pack, SoundType.TALK_HOME)] = synthesizeTalkHome()
+                }
+
+                // 2. Build SoundPool
                 val audioAttributes = AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_GAME)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build()
 
                 val pool = SoundPool.Builder()
-                    .setMaxStreams(8)
+                    .setMaxStreams(12)
                     .setAudioAttributes(audioAttributes)
                     .build()
 
                 pool.setOnLoadCompleteListener { _, sampleId, status ->
                     if (status == 0) {
                         loadedSoundIds.add(sampleId)
-                        Log.d(tag, "SoundPool sample $sampleId loaded successfully")
-                    } else {
-                        Log.w(tag, "SoundPool sample $sampleId failed with status $status")
                     }
                 }
                 soundPool = pool
@@ -127,18 +172,18 @@ class SoundManager(private val context: Context) {
                 // 3. Write PCM WAV files to cache and load into SoundPool
                 val soundDir = File(context.cacheDir, "ludo_audio").apply { mkdirs() }
 
-                for ((type, pcm) in pcmBuffers) {
-                    val file = File(soundDir, "${type.name.lowercase()}.wav")
+                for ((key, pcm) in pcmBuffers) {
+                    val file = File(soundDir, "${key.pack.name.lowercase()}_${key.type.name.lowercase()}.wav")
                     if (!file.exists() || file.length() == 0L) {
                         val wavBytes = createWavByteArray(pcm, sampleRate)
                         FileOutputStream(file).use { it.write(wavBytes) }
                     }
                     val id = pool.load(file.absolutePath, 1)
                     if (id != 0) {
-                        soundIds[type] = id
+                        soundIds[key] = id
                     }
                 }
-                Log.i(tag, "Audio engine initialized with 7 synthesized sounds (44.1kHz)")
+                Log.i(tag, "Audio engine initialized for all sound packs & talking tokens")
             } catch (e: Exception) {
                 Log.w(tag, "SoundPool setup error, fallback enabled: ${e.message}")
             }
@@ -149,84 +194,95 @@ class SoundManager(private val context: Context) {
     // Public Sound Triggers
     // -------------------------------------------------------------------------
 
-    fun playDiceRoll(soundEnabled: Boolean, hapticsEnabled: Boolean) {
+    fun playDiceRoll(soundEnabled: Boolean, hapticsEnabled: Boolean, pack: SoundPack = currentSoundPack) {
         if (hapticsEnabled) vibrate(35)
-        if (!soundEnabled || !isMediaVolumeAudible()) return
-        playSound(SoundType.DICE_ROLL, volume = 0.95f)
+        if (!soundEnabled || !isMediaVolumeAudible() || masterVolume <= 0.01f) return
+        playSound(SoundKey(pack, SoundType.DICE_ROLL), volume = 0.95f)
     }
 
-    fun playMove(soundEnabled: Boolean, hapticsEnabled: Boolean) {
+    fun playMove(soundEnabled: Boolean, hapticsEnabled: Boolean, pack: SoundPack = currentSoundPack) {
         if (hapticsEnabled) vibrate(22)
-        if (!soundEnabled || !isMediaVolumeAudible()) return
-        playSound(SoundType.TOKEN_MOVE, volume = 0.80f)
+        if (!soundEnabled || !isMediaVolumeAudible() || masterVolume <= 0.01f) return
+        playSound(SoundKey(pack, SoundType.TOKEN_MOVE), volume = 0.80f)
     }
 
-    fun playCapture(soundEnabled: Boolean, hapticsEnabled: Boolean) {
+    fun playCapture(soundEnabled: Boolean, hapticsEnabled: Boolean, pack: SoundPack = currentSoundPack) {
         if (hapticsEnabled) vibratePattern(longArrayOf(0, 50, 40, 90))
-        if (!soundEnabled || !isMediaVolumeAudible()) return
-        playSound(SoundType.TOKEN_CAPTURE, volume = 0.95f)
+        if (!soundEnabled || !isMediaVolumeAudible() || masterVolume <= 0.01f) return
+        playSound(SoundKey(pack, SoundType.TOKEN_CAPTURE), volume = 0.95f)
     }
 
-    fun playHomeSafe(soundEnabled: Boolean, hapticsEnabled: Boolean) {
+    fun playHomeSafe(soundEnabled: Boolean, hapticsEnabled: Boolean, pack: SoundPack = currentSoundPack) {
         if (hapticsEnabled) vibrate(45)
-        if (!soundEnabled || !isMediaVolumeAudible()) return
-        playSound(SoundType.TOKEN_HOME, volume = 0.90f)
+        if (!soundEnabled || !isMediaVolumeAudible() || masterVolume <= 0.01f) return
+        playSound(SoundKey(pack, SoundType.TOKEN_HOME), volume = 0.90f)
     }
 
-    fun playVictory(soundEnabled: Boolean, hapticsEnabled: Boolean) {
+    fun playVictory(soundEnabled: Boolean, hapticsEnabled: Boolean, pack: SoundPack = currentSoundPack) {
         if (hapticsEnabled) vibratePattern(longArrayOf(0, 80, 50, 80, 50, 220))
-        if (!soundEnabled || !isMediaVolumeAudible()) return
-        playSound(SoundType.VICTORY, volume = 0.95f)
+        if (!soundEnabled || !isMediaVolumeAudible() || masterVolume <= 0.01f) return
+        playSound(SoundKey(pack, SoundType.VICTORY), volume = 0.95f)
     }
 
     fun playButtonClick(soundEnabled: Boolean) {
-        if (!soundEnabled || !isMediaVolumeAudible()) return
-        playSound(SoundType.BUTTON_CLICK, volume = 0.60f)
+        if (!soundEnabled || !isMediaVolumeAudible() || masterVolume <= 0.01f) return
+        playSound(SoundKey(currentSoundPack, SoundType.BUTTON_CLICK), volume = 0.60f)
     }
 
     fun playTurnChange(soundEnabled: Boolean) {
-        if (!soundEnabled || !isMediaVolumeAudible()) return
-        playSound(SoundType.TURN_CHANGE, volume = 0.70f)
+        if (!soundEnabled || !isMediaVolumeAudible() || masterVolume <= 0.01f) return
+        playSound(SoundKey(currentSoundPack, SoundType.TURN_CHANGE), volume = 0.70f)
+    }
+
+    fun playTalkingToken(event: String, soundEnabled: Boolean) {
+        if (!soundEnabled || !isMediaVolumeAudible() || masterVolume <= 0.01f) return
+        val type = when {
+            event.contains("step", ignoreCase = true) || event.contains("march", ignoreCase = true) -> SoundType.TALK_STEP
+            event.contains("gotcha", ignoreCase = true) || event.contains("catch", ignoreCase = true) -> SoundType.TALK_CAPTURE
+            event.contains("6", ignoreCase = true) || event.contains("six", ignoreCase = true) -> SoundType.TALK_SIX
+            else -> SoundType.TALK_HOME
+        }
+        playSound(SoundKey(currentSoundPack, type), volume = 0.85f)
+    }
+
+    fun playSoundPreview(pack: SoundPack, soundEnabled: Boolean = true) {
+        if (!soundEnabled || !isMediaVolumeAudible() || masterVolume <= 0.01f) return
+        // Play home chime from that sound pack as an immediate preview
+        playSound(SoundKey(pack, SoundType.TOKEN_HOME), volume = 0.90f)
     }
 
     // -------------------------------------------------------------------------
-    // Multi-tier Playback Engine
+    // Playback Engine
     // -------------------------------------------------------------------------
 
-    private fun playSound(type: SoundType, volume: Float) {
+    private fun playSound(key: SoundKey, volume: Float) {
+        val effectiveVolume = (volume * masterVolume).coerceIn(0.0f, 1.0f)
+        if (effectiveVolume <= 0.01f) return
+
         scope.launch {
             try {
                 val pool = soundPool
-                val soundId = soundIds[type]
+                val soundId = soundIds[key] ?: soundIds[SoundKey(SoundPack.CLASSIC, key.type)]
                 var played = false
 
-                // 1. Try SoundPool first
                 if (pool != null && soundId != null && loadedSoundIds.contains(soundId)) {
-                    val streamId = pool.play(soundId, volume, volume, 1, 0, 1.0f)
+                    val streamId = pool.play(soundId, effectiveVolume, effectiveVolume, 1, 0, 1.0f)
                     if (streamId != 0) {
                         played = true
                     }
                 }
 
-                // 2. Fallback to direct static AudioTrack with padded buffer
                 if (!played) {
-                    val pcm = pcmBuffers[type] ?: when (type) {
-                        SoundType.DICE_ROLL -> synthesizeDiceRoll()
-                        SoundType.TOKEN_MOVE -> synthesizeTokenMove()
-                        SoundType.TOKEN_CAPTURE -> synthesizeTokenCapture()
-                        SoundType.TOKEN_HOME -> synthesizeTokenHome()
-                        SoundType.VICTORY -> synthesizeVictoryFanfare()
-                        SoundType.BUTTON_CLICK -> synthesizeButtonClick()
-                        SoundType.TURN_CHANGE -> synthesizeTurnChange()
-                    }
-                    val trackSuccess = playAudioTrackFallback(pcm, volume)
-                    if (!trackSuccess) {
-                        // 3. Fallback to ToneGenerator for extreme HAL constraints
-                        playToneGeneratorFallback(type)
+                    val pcm = pcmBuffers[key] ?: pcmBuffers[SoundKey(SoundPack.CLASSIC, key.type)]
+                    if (pcm != null) {
+                        val trackSuccess = playAudioTrackFallback(pcm, effectiveVolume)
+                        if (!trackSuccess) {
+                            playToneGeneratorFallback(key.type)
+                        }
                     }
                 }
             } catch (e: Exception) {
-                Log.w(tag, "Playback error for $type: ${e.message}")
+                Log.w(tag, "Playback error for $key: ${e.message}")
             }
         }
     }
@@ -266,7 +322,7 @@ class SoundManager(private val context: Context) {
                         .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                         .build()
                 )
-                .setBufferSizeInBytes(scaledShorts.size * 2)
+                .setBufferSizeInBytes(finalBufSize)
                 .setTransferMode(AudioTrack.MODE_STATIC)
                 .build()
 
@@ -274,8 +330,8 @@ class SoundManager(private val context: Context) {
             if (written > 0) {
                 track.play()
                 scope.launch {
-                    val durationMs = (pcm.size * 1000L) / sampleRate + 150
-                    delay(durationMs)
+                    val playMs = (scaledShorts.size.toLong() * 1000L) / sampleRate + 50L
+                    delay(playMs)
                     try {
                         track.stop()
                         track.release()
@@ -293,7 +349,7 @@ class SoundManager(private val context: Context) {
     }
 
     private fun playToneGeneratorFallback(type: SoundType) {
-        if (!isMediaVolumeAudible()) return
+        if (!isMediaVolumeAudible() || masterVolume <= 0.01f) return
         try {
             val toneType = when (type) {
                 SoundType.DICE_ROLL -> ToneGenerator.TONE_PROP_BEEP
@@ -303,8 +359,12 @@ class SoundManager(private val context: Context) {
                 SoundType.VICTORY -> ToneGenerator.TONE_CDMA_HIGH_L
                 SoundType.BUTTON_CLICK -> ToneGenerator.TONE_PROP_PROMPT
                 SoundType.TURN_CHANGE -> ToneGenerator.TONE_PROP_BEEP
+                SoundType.TALK_STEP -> ToneGenerator.TONE_PROP_ACK
+                SoundType.TALK_CAPTURE -> ToneGenerator.TONE_PROP_BEEP2
+                SoundType.TALK_SIX -> ToneGenerator.TONE_CDMA_ALERT_NETWORK_LITE
+                SoundType.TALK_HOME -> ToneGenerator.TONE_CDMA_HIGH_L
             }
-            val tg = ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME)
+            val tg = ToneGenerator(AudioManager.STREAM_MUSIC, (ToneGenerator.MAX_VOLUME * masterVolume).toInt())
             tg.startTone(toneType, 120)
             scope.launch {
                 delay(150)
@@ -321,182 +381,136 @@ class SoundManager(private val context: Context) {
 
     private fun vibrate(durationMs: Long) {
         try {
+            val vib = vibrator ?: return
+            if (!vib.hasVibrator()) return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
+                vib.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
             } else {
                 @Suppress("DEPRECATION")
-                vibrator?.vibrate(durationMs)
+                vib.vibrate(durationMs)
             }
         } catch (_: Exception) {}
     }
 
     private fun vibratePattern(pattern: LongArray) {
         try {
+            val vib = vibrator ?: return
+            if (!vib.hasVibrator()) return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createWaveform(pattern, -1))
+                vib.vibrate(VibrationEffect.createWaveform(pattern, -1))
             } else {
                 @Suppress("DEPRECATION")
-                vibrator?.vibrate(pattern, -1)
+                vib.vibrate(pattern, -1)
             }
         } catch (_: Exception) {}
     }
 
-    fun release() {
-        try {
-            soundPool?.release()
-            soundPool = null
-        } catch (_: Exception) {}
-    }
-
     // -------------------------------------------------------------------------
-    // Sound Synthesis (Natural, Rich 44.1kHz Game Audio)
+    // Audio Synthesis Algorithms
     // -------------------------------------------------------------------------
 
-    /**
-     * Dice Roll: Realistic wooden tumbling rattle with micro-impacts and woody resonance (~340ms).
-     */
+    // --- CLASSIC PACK ---
     private fun synthesizeDiceRoll(): ShortArray {
-        val durationMs = 340
+        val durationMs = 280
         val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
         val buffer = ShortArray(totalSamples)
-
-        val clickOffsetsMs = intArrayOf(0, 40, 85, 140, 205, 270)
-        val clickFrequencies = doubleArrayOf(740.0, 680.0, 620.0, 540.0, 480.0, 430.0)
-
-        for (idx in clickOffsetsMs.indices) {
-            val startSample = (clickOffsetsMs[idx] * sampleRate) / 1000
-            val baseFreq = clickFrequencies[idx]
-            val clickDuration = (sampleRate * 0.045).toInt()
-
-            for (i in 0 until clickDuration) {
+        val clickDelays = intArrayOf(0, 30, 68, 115, 170, 225)
+        for (delayMs in clickDelays) {
+            val startSample = (sampleRate * (delayMs / 1000.0)).toInt()
+            val clickSamples = (sampleRate * 0.038).toInt()
+            val baseFreq = Random.nextDouble(280.0, 480.0)
+            for (i in 0 until clickSamples) {
                 val targetIndex = startSample + i
                 if (targetIndex >= totalSamples) break
                 val t = i.toDouble() / sampleRate
-
-                val pitchDecay = baseFreq * exp(-i * 12.0 / clickDuration)
-                val envelope = exp(-i * 9.0 / clickDuration)
-                val noise = (Random.nextDouble() * 2.0 - 1.0) * 0.25
-
-                val sampleVal = (sin(2 * PI * pitchDecay * t) + noise) * envelope * Short.MAX_VALUE * 0.50
-                val current = buffer[targetIndex].toInt()
-                val mixed = (current + sampleVal.toInt()).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                val env = exp(-t * 90.0)
+                val noise = Random.nextDouble(-0.35, 0.35)
+                val sampleVal = (sin(2 * PI * baseFreq * t) + noise) * env * Short.MAX_VALUE * 0.40
+                val mixed = (buffer[targetIndex].toInt() + sampleVal.toInt()).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
                 buffer[targetIndex] = mixed.toShort()
             }
         }
         return buffer
     }
 
-    /**
-     * Token Move: Pleasant, smooth wooden board tap / plop (~110ms).
-     */
     private fun synthesizeTokenMove(): ShortArray {
-        val durationMs = 110
+        val durationMs = 65
         val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
         val buffer = ShortArray(totalSamples)
-
         for (i in 0 until totalSamples) {
             val t = i.toDouble() / sampleRate
             val progress = i.toDouble() / totalSamples
-            val freq = 480.0 - progress * 190.0
-            val envelope = when {
-                progress < 0.05 -> progress / 0.05
-                else -> exp(-(progress - 0.05) * 6.5)
-            }
-            val s1 = sin(2 * PI * freq * t)
-            val s2 = sin(4 * PI * freq * t) * 0.28
-            val sampleVal = (s1 + s2) * envelope * Short.MAX_VALUE * 0.55
-            buffer[i] = sampleVal.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            val freq = 420.0 + progress * 240.0
+            val env = exp(-progress * 6.5)
+            val sampleVal = sin(2 * PI * freq * t) * env * Short.MAX_VALUE * 0.55
+            buffer[i] = sampleVal.toInt().toShort()
         }
         return buffer
     }
 
-    /**
-     * Token Capture: Punchy impact with dramatic downward swoosh and low thud (~260ms).
-     */
     private fun synthesizeTokenCapture(): ShortArray {
-        val durationMs = 260
+        val durationMs = 220
         val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
         val buffer = ShortArray(totalSamples)
-
         for (i in 0 until totalSamples) {
             val t = i.toDouble() / sampleRate
             val progress = i.toDouble() / totalSamples
-            val freq = 140.0 + 740.0 * exp(-progress * 7.0)
-            val envelope = when {
-                progress < 0.03 -> progress / 0.03
-                else -> exp(-(progress - 0.03) * 5.0)
-            }
-            val impactNoise = if (progress < 0.15) (Random.nextDouble() * 2.0 - 1.0) * 0.20 else 0.0
-            val subBass = sin(2 * PI * 90.0 * t) * 0.40
-            val mainTone = sin(2 * PI * freq * t)
-
-            val sampleVal = (mainTone + subBass + impactNoise) * envelope * Short.MAX_VALUE * 0.60
-            buffer[i] = sampleVal.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            val f1 = 820.0 - progress * 520.0
+            val env1 = exp(-progress * 5.0)
+            val s1 = sin(2 * PI * f1 * t)
+            val noise = Random.nextDouble(-0.25, 0.25) * exp(-progress * 14.0)
+            val s2 = sin(2 * PI * 220.0 * t) * exp(-progress * 4.0) * 0.6
+            val sampleVal = (s1 + noise + s2) * env1 * Short.MAX_VALUE * 0.45
+            buffer[i] = sampleVal.toInt().toShort()
         }
         return buffer
     }
 
-    /**
-     * Token Home: Cheerful bright 4-note ascending chime C5 -> E5 -> G5 -> C6 (~420ms).
-     */
     private fun synthesizeTokenHome(): ShortArray {
-        val durationMs = 420
+        val durationMs = 380
         val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
         val buffer = ShortArray(totalSamples)
-
-        val notes = doubleArrayOf(523.25, 659.25, 783.99, 1046.50)
-        val noteDuration = totalSamples / notes.size
-
-        for (n in notes.indices) {
-            val start = n * noteDuration
-            val freq = notes[n]
-            val ringLength = totalSamples - start
-
-            for (i in 0 until ringLength) {
-                val idx = start + i
-                if (idx >= totalSamples) break
+        val freqs = doubleArrayOf(523.25, 659.25, 783.99, 1046.50)
+        val noteDurSamples = totalSamples / freqs.size
+        for ((idx, f) in freqs.withIndex()) {
+            val startSample = idx * (noteDurSamples * 0.70).toInt()
+            val noteLen = minOf(noteDurSamples, totalSamples - startSample)
+            for (i in 0 until noteLen) {
+                val targetIndex = startSample + i
+                if (targetIndex >= totalSamples) break
                 val t = i.toDouble() / sampleRate
-                val env = exp(-i.toDouble() / (sampleRate * 0.12))
-                val fundamental = sin(2 * PI * freq * t)
-                val overtone = sin(2 * PI * freq * 2.76 * t) * 0.25
-                val sampleVal = (fundamental + overtone) * env * Short.MAX_VALUE * 0.40
-                val mixed = (buffer[idx].toInt() + sampleVal.toInt()).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
-                buffer[idx] = mixed.toShort()
+                val progress = i.toDouble() / noteLen
+                val env = exp(-progress * 3.5)
+                val s1 = sin(2 * PI * f * t)
+                val s2 = sin(2 * PI * f * 2 * t) * 0.25
+                val sampleVal = (s1 + s2) * env * Short.MAX_VALUE * 0.40
+                val mixed = (buffer[targetIndex].toInt() + sampleVal.toInt()).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                buffer[targetIndex] = mixed.toShort()
             }
         }
         return buffer
     }
 
-    /**
-     * Victory Fanfare: Triumphant brass/chime fanfare celebration (~850ms).
-     */
     private fun synthesizeVictoryFanfare(): ShortArray {
-        val durationMs = 850
+        val durationMs = 1200
         val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
         val buffer = ShortArray(totalSamples)
-
-        val notes = doubleArrayOf(392.00, 523.25, 659.25, 783.99, 1046.50)
-        val noteDurationsMs = intArrayOf(110, 110, 110, 150, 370)
-
+        val melody = listOf(
+            Pair(523.25, 140), Pair(659.25, 140), Pair(783.99, 140),
+            Pair(1046.50, 220), Pair(880.0, 140), Pair(1046.50, 420)
+        )
         var curSample = 0
-        for (idx in notes.indices) {
-            val freq = notes[idx]
-            val durSamples = (noteDurationsMs[idx] * sampleRate) / 1000
-            val ringSamples = (durSamples * 1.5).toInt()
-
-            for (i in 0 until ringSamples) {
+        for ((freq, durMs) in melody) {
+            val durSamples = (sampleRate * (durMs / 1000.0)).toInt()
+            for (i in 0 until durSamples) {
                 val targetIndex = curSample + i
                 if (targetIndex >= totalSamples) break
                 val t = i.toDouble() / sampleRate
                 val progress = i.toDouble() / durSamples
-                val env = when {
-                    progress < 0.08 -> progress / 0.08
-                    progress <= 1.0 -> 1.0 - progress * 0.15
-                    else -> exp(-(progress - 1.0) * 4.0)
-                }
+                val env = exp(-progress * 2.2)
                 val s1 = sin(2 * PI * freq * t)
-                val s2 = sin(4 * PI * freq * t) * 0.35
-                val s3 = sin(6 * PI * freq * t) * 0.15
+                val s2 = sin(2 * PI * freq * 2.0 * t) * 0.30
+                val s3 = sin(2 * PI * freq * 3.0 * t) * 0.15
                 val sampleVal = (s1 + s2 + s3) * env * Short.MAX_VALUE * 0.45
                 val mixed = (buffer[targetIndex].toInt() + sampleVal.toInt()).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
                 buffer[targetIndex] = mixed.toShort()
@@ -506,14 +520,301 @@ class SoundManager(private val context: Context) {
         return buffer
     }
 
-    /**
-     * Button Click: Subtle crisp UI tap (~35ms).
-     */
+    // --- ROYAL PACK ---
+    private fun synthesizeRoyalDiceRoll(): ShortArray {
+        val durationMs = 320
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        val chimes = doubleArrayOf(1046.5, 1318.5, 1567.98, 2093.0)
+        for ((idx, f) in chimes.withIndex()) {
+            val startSample = (idx * 55 * sampleRate / 1000)
+            val noteLen = minOf((sampleRate * 0.12).toInt(), totalSamples - startSample)
+            for (i in 0 until noteLen) {
+                val targetIndex = startSample + i
+                if (targetIndex >= totalSamples) break
+                val t = i.toDouble() / sampleRate
+                val progress = i.toDouble() / noteLen
+                val env = exp(-progress * 6.0)
+                val s1 = sin(2 * PI * f * t)
+                val s2 = sin(2 * PI * (f * 1.5) * t) * 0.4
+                val sampleVal = (s1 + s2) * env * Short.MAX_VALUE * 0.35
+                val mixed = (buffer[targetIndex].toInt() + sampleVal.toInt()).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                buffer[targetIndex] = mixed.toShort()
+            }
+        }
+        return buffer
+    }
+
+    private fun synthesizeRoyalTokenMove(): ShortArray {
+        val durationMs = 120
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        // Regal harp pluck with rich harmonics
+        for (i in 0 until totalSamples) {
+            val t = i.toDouble() / sampleRate
+            val progress = i.toDouble() / totalSamples
+            val f = 659.25
+            val env = exp(-progress * 5.0)
+            val s1 = sin(2 * PI * f * t)
+            val s2 = sin(2 * PI * f * 2.0 * t) * 0.35
+            val s3 = sin(2 * PI * f * 3.0 * t) * 0.18
+            val sampleVal = (s1 + s2 + s3) * env * Short.MAX_VALUE * 0.50
+            buffer[i] = sampleVal.toInt().toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeRoyalTokenCapture(): ShortArray {
+        val durationMs = 350
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        // Imperial resonant gong / brass strike
+        for (i in 0 until totalSamples) {
+            val t = i.toDouble() / sampleRate
+            val progress = i.toDouble() / totalSamples
+            val env = exp(-progress * 3.0)
+            val s1 = sin(2 * PI * 196.0 * t)
+            val s2 = sin(2 * PI * 392.0 * t) * 0.5
+            val s3 = sin(2 * PI * 587.33 * t) * 0.3
+            val sampleVal = (s1 + s2 + s3) * env * Short.MAX_VALUE * 0.48
+            buffer[i] = sampleVal.toInt().toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeRoyalTokenHome(): ShortArray {
+        val durationMs = 450
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        // Cathedral bell chime (G4, C5, E5, G5)
+        val freqs = doubleArrayOf(392.0, 523.25, 659.25, 783.99)
+        for ((idx, f) in freqs.withIndex()) {
+            val startSample = idx * (sampleRate * 0.08).toInt()
+            val noteLen = totalSamples - startSample
+            for (i in 0 until noteLen) {
+                val targetIndex = startSample + i
+                if (targetIndex >= totalSamples) break
+                val t = i.toDouble() / sampleRate
+                val progress = i.toDouble() / noteLen
+                val env = exp(-progress * 3.0)
+                val s1 = sin(2 * PI * f * t)
+                val s2 = sin(2 * PI * f * 2.0 * t) * 0.4
+                val sampleVal = (s1 + s2) * env * Short.MAX_VALUE * 0.35
+                val mixed = (buffer[targetIndex].toInt() + sampleVal.toInt()).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                buffer[targetIndex] = mixed.toShort()
+            }
+        }
+        return buffer
+    }
+
+    private fun synthesizeRoyalVictoryFanfare(): ShortArray {
+        val durationMs = 1400
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        // Grand imperial coronation brass
+        val melody = listOf(
+            Pair(392.0, 160), Pair(523.25, 160), Pair(659.25, 160),
+            Pair(783.99, 280), Pair(1046.50, 320), Pair(1318.51, 480)
+        )
+        var curSample = 0
+        for ((freq, durMs) in melody) {
+            val durSamples = (sampleRate * (durMs / 1000.0)).toInt()
+            for (i in 0 until durSamples) {
+                val targetIndex = curSample + i
+                if (targetIndex >= totalSamples) break
+                val t = i.toDouble() / sampleRate
+                val progress = i.toDouble() / durSamples
+                val env = exp(-progress * 2.0)
+                val s1 = sin(2 * PI * freq * t)
+                val s2 = sin(2 * PI * freq * 2.0 * t) * 0.35
+                val s3 = sin(2 * PI * freq * 3.0 * t) * 0.20
+                val sampleVal = (s1 + s2 + s3) * env * Short.MAX_VALUE * 0.48
+                val mixed = (buffer[targetIndex].toInt() + sampleVal.toInt()).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                buffer[targetIndex] = mixed.toShort()
+            }
+            curSample += (durSamples * 0.85).toInt()
+        }
+        return buffer
+    }
+
+    // --- FUN PACK ---
+    private fun synthesizeFunDiceRoll(): ShortArray {
+        val durationMs = 280
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        // Comic spring boing & pop
+        for (i in 0 until totalSamples) {
+            val t = i.toDouble() / sampleRate
+            val progress = i.toDouble() / totalSamples
+            val f = 300.0 + sin(2 * PI * 18.0 * t) * 160.0
+            val env = exp(-progress * 4.5)
+            val sampleVal = sin(2 * PI * f * t) * env * Short.MAX_VALUE * 0.50
+            buffer[i] = sampleVal.toInt().toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeFunTokenMove(): ShortArray {
+        val durationMs = 80
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        // Playful bubbly bloop
+        for (i in 0 until totalSamples) {
+            val t = i.toDouble() / sampleRate
+            val progress = i.toDouble() / totalSamples
+            val f = 550.0 + progress * 700.0
+            val env = exp(-progress * 8.0)
+            val sampleVal = sin(2 * PI * f * t) * env * Short.MAX_VALUE * 0.60
+            buffer[i] = sampleVal.toInt().toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeFunTokenCapture(): ShortArray {
+        val durationMs = 240
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        // Cartoon slide whistle down + boing
+        for (i in 0 until totalSamples) {
+            val t = i.toDouble() / sampleRate
+            val progress = i.toDouble() / totalSamples
+            val f = (1200.0 - progress * 800.0) + sin(2 * PI * 24.0 * t) * 90.0
+            val env = exp(-progress * 4.0)
+            val sampleVal = sin(2 * PI * f * t) * env * Short.MAX_VALUE * 0.50
+            buffer[i] = sampleVal.toInt().toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeFunTokenHome(): ShortArray {
+        val durationMs = 360
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        // Upbeat 8-bit retro victory arpeggio
+        val notes = doubleArrayOf(440.0, 554.37, 659.25, 880.0)
+        val noteDur = totalSamples / notes.size
+        for ((idx, f) in notes.withIndex()) {
+            val startSample = idx * noteDur
+            for (i in 0 until noteDur) {
+                val targetIndex = startSample + i
+                if (targetIndex >= totalSamples) break
+                val t = i.toDouble() / sampleRate
+                val progress = i.toDouble() / noteDur
+                val env = exp(-progress * 5.0)
+                val sampleVal = sin(2 * PI * f * t) * env * Short.MAX_VALUE * 0.45
+                buffer[targetIndex] = sampleVal.toInt().toShort()
+            }
+        }
+        return buffer
+    }
+
+    private fun synthesizeFunVictoryFanfare(): ShortArray {
+        val durationMs = 1100
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        // Bouncy carnival victory tune
+        val melody = listOf(
+            Pair(523.25, 120), Pair(659.25, 120), Pair(783.99, 120),
+            Pair(659.25, 120), Pair(783.99, 180), Pair(1046.50, 360)
+        )
+        var curSample = 0
+        for ((freq, durMs) in melody) {
+            val durSamples = (sampleRate * (durMs / 1000.0)).toInt()
+            for (i in 0 until durSamples) {
+                val targetIndex = curSample + i
+                if (targetIndex >= totalSamples) break
+                val t = i.toDouble() / sampleRate
+                val progress = i.toDouble() / durSamples
+                val env = exp(-progress * 3.0)
+                val s1 = sin(2 * PI * freq * t)
+                val sampleVal = s1 * env * Short.MAX_VALUE * 0.45
+                val mixed = (buffer[targetIndex].toInt() + sampleVal.toInt()).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                buffer[targetIndex] = mixed.toShort()
+            }
+            curSample += durSamples
+        }
+        return buffer
+    }
+
+    // --- TALKING TOKENS VOCAL VOICES ---
+    private fun synthesizeTalkStep(): ShortArray {
+        val durationMs = 110
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        // Cute double chirp: "pip-pop!"
+        val half = totalSamples / 2
+        for (i in 0 until totalSamples) {
+            val t = i.toDouble() / sampleRate
+            val progress = (i % half).toDouble() / half
+            val f = if (i < half) 600.0 + progress * 200.0 else 800.0 + progress * 250.0
+            val env = exp(-progress * 7.0)
+            val sampleVal = sin(2 * PI * f * t) * env * Short.MAX_VALUE * 0.50
+            buffer[i] = sampleVal.toInt().toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeTalkCapture(): ShortArray {
+        val durationMs = 210
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        // Energetic "Gotcha!" cheer
+        for (i in 0 until totalSamples) {
+            val t = i.toDouble() / sampleRate
+            val progress = i.toDouble() / totalSamples
+            val f = 450.0 + sin(2 * PI * 14.0 * t) * 120.0 + progress * 300.0
+            val env = exp(-progress * 3.5)
+            val s1 = sin(2 * PI * f * t)
+            val s2 = sin(2 * PI * (f * 1.5) * t) * 0.35
+            val sampleVal = (s1 + s2) * env * Short.MAX_VALUE * 0.50
+            buffer[i] = sampleVal.toInt().toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeTalkSix(): ShortArray {
+        val durationMs = 250
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        // Excited rising sparkle cheer
+        for (i in 0 until totalSamples) {
+            val t = i.toDouble() / sampleRate
+            val progress = i.toDouble() / totalSamples
+            val f = 600.0 + progress * 800.0
+            val env = exp(-progress * 3.0)
+            val s1 = sin(2 * PI * f * t)
+            val s2 = sin(2 * PI * (f * 2.0) * t) * 0.3
+            val sampleVal = (s1 + s2) * env * Short.MAX_VALUE * 0.45
+            buffer[i] = sampleVal.toInt().toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeTalkHome(): ShortArray {
+        val durationMs = 320
+        val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
+        val buffer = ShortArray(totalSamples)
+        // Joyful home safe flourish
+        val chord = doubleArrayOf(523.25, 659.25, 783.99, 1046.50)
+        for (i in 0 until totalSamples) {
+            val t = i.toDouble() / sampleRate
+            val progress = i.toDouble() / totalSamples
+            val env = exp(-progress * 3.0)
+            var sum = 0.0
+            for (f in chord) {
+                sum += sin(2 * PI * f * t) * 0.25
+            }
+            val sampleVal = sum * env * Short.MAX_VALUE * 0.55
+            buffer[i] = sampleVal.toInt().toShort()
+        }
+        return buffer
+    }
+
+    // --- COMMON UI SOUNDS ---
     private fun synthesizeButtonClick(): ShortArray {
         val durationMs = 35
         val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
         val buffer = ShortArray(totalSamples)
-
         for (i in 0 until totalSamples) {
             val t = i.toDouble() / sampleRate
             val progress = i.toDouble() / totalSamples
@@ -525,14 +826,10 @@ class SoundManager(private val context: Context) {
         return buffer
     }
 
-    /**
-     * Turn Change: Soft pleasant notification ding (~160ms).
-     */
     private fun synthesizeTurnChange(): ShortArray {
         val durationMs = 160
         val totalSamples = (sampleRate * (durationMs / 1000.0)).toInt()
         val buffer = ShortArray(totalSamples)
-
         for (i in 0 until totalSamples) {
             val t = i.toDouble() / sampleRate
             val progress = i.toDouble() / totalSamples
@@ -609,5 +906,12 @@ class SoundManager(private val context: Context) {
             out[idx++] = ((s.toInt() shr 8) and 0xff).toByte()
         }
         return out
+    }
+
+    fun release() {
+        try {
+            soundPool?.release()
+            soundPool = null
+        } catch (_: Exception) {}
     }
 }

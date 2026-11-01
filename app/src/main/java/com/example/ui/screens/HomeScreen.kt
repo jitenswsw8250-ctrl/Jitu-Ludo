@@ -31,9 +31,11 @@ import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Psychology
@@ -83,6 +85,7 @@ import com.example.model.BoardTheme
 import com.example.model.GameMode
 import com.example.model.PlayerAvatar
 import com.example.model.PlayerColor
+import com.example.model.PlayerTeam
 
 /**
  * Premium Game Setup Screen for JITU LUDO.
@@ -113,6 +116,7 @@ fun HomeScreen(
     onShareGame: () -> Unit,
     onOpenSettings: () -> Unit = {},
     onOpenSkins: () -> Unit = {},
+    onOpenProfile: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedMode by remember { mutableStateOf(GameMode.LOCAL_MULTIPLAYER) }
@@ -182,6 +186,11 @@ fun HomeScreen(
                     )
                 }
 
+                // PROMINENT HOW TO PLAY – TUTORIAL & RULES CARD
+                HowToPlayBannerCard(
+                    onOpenRules = onOpenRules
+                )
+
                 // 2. SELECT GAME MODE
                 GameModeSelectionCard(
                     selectedMode = selectedMode,
@@ -196,11 +205,15 @@ fun HomeScreen(
                     )
                 }
 
-                // 3. NUMBER OF PLAYERS
-                PlayerCountSelectionCard(
-                    playerCount = playerCount,
-                    onCountSelected = { playerCount = it }
-                )
+                // 3. NUMBER OF PLAYERS / TEAM ROSTER OVERVIEW
+                if (selectedMode == GameMode.TEAM_2V2) {
+                    TeamOverviewCard()
+                } else {
+                    PlayerCountSelectionCard(
+                        playerCount = playerCount,
+                        onCountSelected = { playerCount = it }
+                    )
+                }
 
                 // 4. CHOOSE YOUR COLOR (Only in Vs Computer mode)
                 if (selectedMode == GameMode.VS_COMPUTER) {
@@ -234,8 +247,9 @@ fun HomeScreen(
                     onToggleHaptics = onToggleHaptics
                 )
 
-                // 7. COMPACT SECONDARY UTILITY BAR (History, Stats, Skins, Settings, Rules, Share)
+                // 7. COMPACT SECONDARY UTILITY BAR (Profile, History, Stats, Skins, Settings, Rules, Share)
                 QuickUtilityBar(
+                    onOpenProfile = onOpenProfile,
                     onShareGame = onShareGame,
                     onOpenRules = onOpenRules,
                     onOpenStats = onOpenStats,
@@ -288,7 +302,8 @@ fun HomeScreen(
                             text = "START GAME",
                             isSecondary = false,
                             onClick = {
-                                onStartGame(selectedMode, playerCount, humanColor, playerNames, playerAvatars)
+                                val effectivePlayerCount = if (selectedMode == GameMode.TEAM_2V2) 4 else playerCount
+                                onStartGame(selectedMode, effectivePlayerCount, humanColor, playerNames, playerAvatars)
                             }
                         )
                     }
@@ -304,33 +319,64 @@ fun HomeScreen(
                 Icon(
                     imageVector = Icons.Default.Warning,
                     contentDescription = null,
-                    tint = Color(0xFFF59E0B)
+                    tint = Color(0xFFF59E0B),
+                    modifier = Modifier.size(32.dp)
                 )
             },
             title = {
                 Text(
-                    text = "Start New Game?",
+                    text = "Unfinished Match in Progress",
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
             },
             text = {
-                Text(
-                    text = "You have an unfinished game in progress. Starting a new game will discard your current match progress and cannot be undone.",
-                    color = Color(0xFFCBD5E1),
-                    fontSize = 13.sp
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "You currently have an active unfinished match saved on this device.",
+                        color = Color(0xFFE2E8F0),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Starting a new game will replace your current match progress. Would you like to resume your active match or start fresh?",
+                        color = Color(0xFFFDE047),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showConfirmDiscardDialog = false
-                        onStartGame(selectedMode, playerCount, humanColor, playerNames, playerAvatars)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                    modifier = Modifier.testTag("confirm_discard_and_start_button")
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "Discard & Start", fontWeight = FontWeight.Bold)
+                    // Option 1: Resume Current Game
+                    Button(
+                        onClick = {
+                            showConfirmDiscardDialog = false
+                            onResumeGame()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.testTag("resume_saved_game_dialog_button")
+                    ) {
+                        Text(text = "Resume Game", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                    }
+
+                    // Option 2: Start New Game
+                    Button(
+                        onClick = {
+                            showConfirmDiscardDialog = false
+                            val effectivePlayerCount = if (selectedMode == GameMode.TEAM_2V2) 4 else playerCount
+                            onStartGame(selectedMode, effectivePlayerCount, humanColor, playerNames, playerAvatars)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.testTag("confirm_discard_and_start_button")
+                    ) {
+                        Text(text = "Start New Game", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                    }
                 }
             },
             dismissButton = {
@@ -668,6 +714,26 @@ private fun GameModeSelectionCard(
                     }
                 )
             }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 2 vs 2 Team Mode
+            ModeCard(
+                title = "2 vs 2 TEAM MODE",
+                subtitle = "Team A (Red & Yellow) vs Team B (Green & Blue)",
+                isSelected = selectedMode == GameMode.TEAM_2V2,
+                onClick = { onModeSelected(GameMode.TEAM_2V2) },
+                modifier = Modifier.fillMaxWidth(),
+                testTag = "mode_team_2v2",
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Groups,
+                        contentDescription = null,
+                        modifier = Modifier.size(30.dp),
+                        tint = if (selectedMode == GameMode.TEAM_2V2) Color(0xFFFDE047) else Color(0xFFF59E0B)
+                    )
+                }
+            )
         }
     }
 }
@@ -866,6 +932,121 @@ private fun PlayerCountSelectionCard(
 }
 
 // -----------------------------------------------------------------------------
+// 3b. Team Roster Overview Card (2 vs 2 Team Mode)
+// -----------------------------------------------------------------------------
+
+@Composable
+private fun TeamOverviewCard() {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("team_mode_overview_card"),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.5.dp, Color(0xFFF59E0B).copy(alpha = 0.7f)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF221108)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Groups,
+                    contentDescription = null,
+                    tint = Color(0xFFF59E0B),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "2 VS 2 TEAM ROSTERS (4 PLAYERS)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFDE047),
+                    letterSpacing = 1.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Team A card (Red + Yellow)
+                Card(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF38150A)),
+                    border = BorderStroke(1.dp, Color(0xFFE11D48).copy(alpha = 0.6f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "TEAM A",
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFFFBBF24),
+                            fontSize = 12.sp
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFDC2626)))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Red", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(" + ", color = Color(0xFF94A3B8), fontSize = 11.sp)
+                            Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFEAB308)))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Yellow", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Opposite Partners",
+                            color = Color(0xFFCBD5E1),
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+
+                // Team B card (Green + Blue)
+                Card(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0B2418)),
+                    border = BorderStroke(1.dp, Color(0xFF16A34A).copy(alpha = 0.6f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "TEAM B",
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFF38BDF8),
+                            fontSize = 12.sp
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF16A34A)))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Green", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(" + ", color = Color(0xFF94A3B8), fontSize = 11.sp)
+                            Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF2563EB)))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Blue", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Opposite Partners",
+                            color = Color(0xFFCBD5E1),
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
 // 4. Color Picker Card (Vs Computer)
 // -----------------------------------------------------------------------------
 
@@ -985,8 +1166,9 @@ private fun PlayerNamesCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            val activeColors = if (selectedMode == GameMode.VS_COMPUTER) {
-                when (playerCount) {
+            val activeColors = when (selectedMode) {
+                GameMode.TEAM_2V2 -> listOf(PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE)
+                GameMode.VS_COMPUTER -> when (playerCount) {
                     2 -> {
                         val opposite = when (humanColor) {
                             PlayerColor.RED -> PlayerColor.YELLOW
@@ -1006,8 +1188,7 @@ private fun PlayerNamesCard(
                         listOf(humanColor) + all.filter { it != humanColor }
                     }
                 }
-            } else {
-                when (playerCount) {
+                GameMode.LOCAL_MULTIPLAYER -> when (playerCount) {
                     2 -> listOf(PlayerColor.RED, PlayerColor.YELLOW)
                     3 -> listOf(PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW)
                     else -> listOf(PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE)
@@ -1024,6 +1205,25 @@ private fun PlayerNamesCard(
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Team indicator badge in 2v2 Team Mode
+                    if (selectedMode == GameMode.TEAM_2V2) {
+                        val team = PlayerTeam.forColor(color)
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (team == PlayerTeam.TEAM_A) Color(0xFF881337) else Color(0xFF064E3B),
+                            border = BorderStroke(1.dp, if (team == PlayerTeam.TEAM_A) Color(0xFFFBBF24) else Color(0xFF38BDF8)),
+                            modifier = Modifier.padding(end = 6.dp)
+                        ) {
+                            Text(
+                                text = if (team == PlayerTeam.TEAM_A) "A" else "B",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
                     // Numbered colored badge matching screenshot
                     Box(
                         modifier = Modifier
@@ -1540,11 +1740,12 @@ private fun AiDifficultySelectionCard(
 }
 
 // -----------------------------------------------------------------------------
-// 7. Compact Secondary Utility Bar (History, Stats, Skins, Settings, Rules, Share)
+// 7. Compact Secondary Utility Bar (Profile, History, Stats, Skins, Settings, Rules, Share)
 // -----------------------------------------------------------------------------
 
 @Composable
 private fun QuickUtilityBar(
+    onOpenProfile: () -> Unit = {},
     onShareGame: () -> Unit,
     onOpenRules: () -> Unit,
     onOpenStats: () -> Unit,
@@ -1556,19 +1757,19 @@ private fun QuickUtilityBar(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Row 1: History, Stats, Skins
+        // Row 1: Profile, Stats, History
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             UtilityButton(
-                text = "History",
-                icon = Icons.Default.History,
-                onClick = onOpenHistory,
+                text = "Profile",
+                icon = Icons.Default.Person,
+                onClick = onOpenProfile,
                 modifier = Modifier.weight(1f),
-                testTag = "home_history_button",
-                accentColor = Color(0xFFFDE047)
+                testTag = "home_profile_button",
+                accentColor = Color(0xFFFFD700)
             )
 
             UtilityButton(
@@ -1581,6 +1782,22 @@ private fun QuickUtilityBar(
             )
 
             UtilityButton(
+                text = "History",
+                icon = Icons.Default.History,
+                onClick = onOpenHistory,
+                modifier = Modifier.weight(1f),
+                testTag = "home_history_button",
+                accentColor = Color(0xFFFDE047)
+            )
+        }
+
+        // Row 2: Skins, Settings, Rules, Share
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            UtilityButton(
                 text = "Skins",
                 icon = Icons.Default.Palette,
                 onClick = onOpenSkins,
@@ -1588,14 +1805,7 @@ private fun QuickUtilityBar(
                 testTag = "home_skins_button",
                 accentColor = Color(0xFFE879F9)
             )
-        }
 
-        // Row 2: Settings, Rules, Share
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
             UtilityButton(
                 text = "Settings",
                 icon = Icons.Default.Settings,
@@ -1819,6 +2029,76 @@ private fun StartGameButton(
                     )
                 )
             )
+        }
+    }
+}
+
+@Composable
+private fun HowToPlayBannerCard(onOpenRules: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpenRules() }
+            .testTag("home_how_to_play_banner"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E0E07)),
+        border = BorderStroke(1.2.dp, Color(0xFFF59E0B).copy(alpha = 0.7f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFFF59E0B).copy(alpha = 0.2f),
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.HelpOutline,
+                            contentDescription = null,
+                            tint = Color(0xFFFDE047),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "HOW TO PLAY – TUTORIAL",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 13.sp,
+                        color = Color(0xFFFFFBEB),
+                        letterSpacing = 0.5.sp
+                    )
+                    Text(
+                        text = "Step-by-step rules, captures, safe stars & tips",
+                        fontSize = 11.sp,
+                        color = Color(0xFFFDE047)
+                    )
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFF78350F).copy(alpha = 0.5f),
+                border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f))
+            ) {
+                Text(
+                    text = "LEARN >",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 11.sp,
+                    color = Color(0xFFFDE047),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
         }
     }
 }

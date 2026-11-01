@@ -311,11 +311,25 @@ fun StatisticsDialog(
                 )
             },
             text = {
-                Text(
-                    text = "Are you sure you want to reset all player stats? This will permanently clear completed game counts, wins, losses, captures, and win rates.",
-                    color = Color(0xFFCBD5E1),
-                    fontSize = 13.sp
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Are you sure you want to reset all player stats? The following lifetime records will be permanently deleted:",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        text = "• Total matches played\n• Wins and losses for all player colors\n• Total tokens captured count\n• Total tokens reached home count\n• Win rate percentages",
+                        color = Color(0xFFFCA5A5),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Note: Player names, selected avatars, and any active saved game will NOT be deleted.",
+                        color = Color(0xFFFDE047),
+                        fontSize = 11.sp
+                    )
+                }
             },
             confirmButton = {
                 Button(

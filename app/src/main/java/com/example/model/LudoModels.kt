@@ -153,11 +153,12 @@ enum class BoardTheme(
 }
 
 data class EmojiReactionEvent(
-    val id: Long = System.currentTimeMillis(),
+    val id: Long = System.nanoTime(),
     val emoji: String,
     val senderName: String,
     val senderColor: PlayerColor,
-    val timestampMs: Long = System.currentTimeMillis()
+    val timestampMs: Long = System.currentTimeMillis(),
+    val expiresAtMs: Long = timestampMs + 1500L
 )
 
 data class Player(
@@ -177,13 +178,41 @@ data class Player(
     val finishedTokensCount: Int get() = tokens.count { it.isFinished }
     val inBaseTokensCount: Int get() = tokens.count { it.isInBase }
     val activeTokensCount: Int get() = tokens.count { it.position is TokenPosition.OnBoard }
+    val team: PlayerTeam get() = PlayerTeam.forColor(color)
     val formattedWinChance: String
         get() = if (estimatedWinChanceText.isNotEmpty()) estimatedWinChanceText else "$liveWinChancePercent%"
 }
 
 enum class GameMode {
     VS_COMPUTER,
-    LOCAL_MULTIPLAYER
+    LOCAL_MULTIPLAYER,
+    TEAM_2V2
+}
+
+enum class PlayerTeam(
+    val title: String,
+    val badge: String,
+    val memberColors: List<PlayerColor>
+) {
+    TEAM_A(
+        title = "Team A",
+        badge = "🅰️",
+        memberColors = listOf(PlayerColor.RED, PlayerColor.YELLOW)
+    ),
+    TEAM_B(
+        title = "Team B",
+        badge = "🅱️",
+        memberColors = listOf(PlayerColor.GREEN, PlayerColor.BLUE)
+    );
+
+    companion object {
+        fun forColor(color: PlayerColor): PlayerTeam {
+            return when (color) {
+                PlayerColor.RED, PlayerColor.YELLOW -> TEAM_A
+                PlayerColor.GREEN, PlayerColor.BLUE -> TEAM_B
+            }
+        }
+    }
 }
 
 enum class TurnPhase {
@@ -261,8 +290,130 @@ enum class GameSkin(
         primaryTone = Color(0xFF94A3B8),
         accentTone = Color(0xFFF8FAFC),
         rimTone = Color(0xFF334155)
-    )
+    ),
+    DIAMOND(
+        title = "Diamond",
+        description = "Brilliant crystalline ice refraction",
+        primaryTone = Color(0xFF38BDF8),
+        accentTone = Color(0xFFE0F2FE),
+        rimTone = Color(0xFF0284C7)
+    ),
+    FIRE(
+        title = "Fire",
+        description = "Blazing fiery lava & solar embers",
+        primaryTone = Color(0xFFEA580C),
+        accentTone = Color(0xFFFDE047),
+        rimTone = Color(0xFF9A3412)
+    ),
+    ICE(
+        title = "Ice",
+        description = "Glacial frost & crystal arctic blue",
+        primaryTone = Color(0xFF06B6D4),
+        accentTone = Color(0xFFCFFAFE),
+        rimTone = Color(0xFF164E63)
+    ),
+    ROYAL_GOLD(
+        title = "Royal Gold",
+        description = "24K imperial mirror luster & crown jewels",
+        primaryTone = Color(0xFFF59E0B),
+        accentTone = Color(0xFFFFFBEB),
+        rimTone = Color(0xFF78350F)
+    ),
+    RAINBOW(
+        title = "Rainbow",
+        description = "Prismatic chromatic spectrum glow",
+        primaryTone = Color(0xFFA855F7),
+        accentTone = Color(0xFFF472B6),
+        rimTone = Color(0xFF4338CA)
+    );
+
+    companion object {
+        fun fromId(id: String?): GameSkin {
+            return values().find { it.name.equals(id, ignoreCase = true) || it.title.equals(id, ignoreCase = true) } ?: CLASSIC
+        }
+    }
 }
+
+enum class AnimatedBackground(
+    val id: String,
+    val title: String,
+    val description: String,
+    val primaryParticleColor: Color,
+    val secondaryParticleColor: Color
+) {
+    ROYAL_PALACE(
+        id = "royal_palace",
+        title = "Royal Palace",
+        description = "Golden ambient sparkles & warm palace light",
+        primaryParticleColor = Color(0xFFFDE047),
+        secondaryParticleColor = Color(0xFFF59E0B)
+    ),
+    JUNGLE(
+        id = "jungle",
+        title = "Jungle",
+        description = "Emerald fireflies & mystical forest motes",
+        primaryParticleColor = Color(0xFF86EFAC),
+        secondaryParticleColor = Color(0xFF22C55E)
+    ),
+    SPACE(
+        id = "space",
+        title = "Cosmic Space",
+        description = "Twinkling star cluster & celestial nebulae",
+        primaryParticleColor = Color(0xFF38BDF8),
+        secondaryParticleColor = Color(0xFFA855F7)
+    ),
+    FESTIVAL(
+        id = "festival",
+        title = "Royal Festival",
+        description = "Floating festival lanterns & celebration sparks",
+        primaryParticleColor = Color(0xFFFB923C),
+        secondaryParticleColor = Color(0xFFF43F5E)
+    );
+
+    companion object {
+        fun fromId(id: String?): AnimatedBackground {
+            return values().find { it.id.equals(id, ignoreCase = true) || it.name.equals(id, ignoreCase = true) } ?: ROYAL_PALACE
+        }
+    }
+}
+
+enum class SoundPack(
+    val id: String,
+    val title: String,
+    val description: String
+) {
+    CLASSIC(
+        id = "classic",
+        title = "Classic",
+        description = "Crisp wooden board clicks & authentic rolls"
+    ),
+    ROYAL(
+        id = "royal",
+        title = "Royal",
+        description = "Majestic golden chimes, harp fanfares & regal resonance"
+    ),
+    FUN(
+        id = "fun",
+        title = "Fun",
+        description = "Playful bouncy pops, bubble sounds & cheerful chimes"
+    );
+
+    companion object {
+        fun fromId(id: String?): SoundPack {
+            return values().find { it.id.equals(id, ignoreCase = true) || it.name.equals(id, ignoreCase = true) } ?: CLASSIC
+        }
+    }
+}
+
+data class TalkingTokenEvent(
+    val id: Long = System.currentTimeMillis(),
+    val tokenId: Int,
+    val color: PlayerColor,
+    val phrase: String,
+    val emoji: String,
+    val timestampMs: Long = System.currentTimeMillis()
+)
+
 
 enum class AnimationSpeed(
     val title: String,
@@ -325,7 +476,12 @@ data class GameState(
     val matchStartTimeMs: Long = System.currentTimeMillis(),
     val matchDurationSeconds: Long = 0L,
     val activeReaction: EmojiReactionEvent? = null,
-    val extraTurnReason: String? = null
+    val extraTurnReason: String? = null,
+    val soundPack: SoundPack = SoundPack.CLASSIC,
+    val soundVolume: Float = 1.0f,
+    val talkingTokensEnabled: Boolean = true,
+    val animatedBackground: AnimatedBackground = AnimatedBackground.ROYAL_PALACE,
+    val talkingTokenEvent: TalkingTokenEvent? = null
 ) {
     val currentPlayer: Player?
         get() = players.getOrNull(currentTurnIndex)

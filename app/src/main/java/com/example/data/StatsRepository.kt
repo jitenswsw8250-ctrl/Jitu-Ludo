@@ -15,7 +15,10 @@ data class PlayerStatsRecord(
     val wins: Int = 0,
     val completedGames: Int = 0,
     val captures: Int = 0,
-    val losses: Int = 0
+    val losses: Int = 0,
+    val tokensHome: Int = 0,
+    val bestStreak: Int = 0,
+    val currentStreak: Int = 0
 ) {
     val winPercentageFormatted: String
         get() {
@@ -68,6 +71,9 @@ class StatsRepository(context: Context) {
                 val completedGames = obj.optInt("completedGames", 0)
                 val captures = obj.optInt("captures", 0)
                 val losses = obj.optInt("losses", (completedGames - wins).coerceAtLeast(0))
+                val tokensHome = obj.optInt("tokensHome", 0)
+                val bestStreak = obj.optInt("bestStreak", 0)
+                val currentStreak = obj.optInt("currentStreak", 0)
                 list.add(
                     PlayerStatsRecord(
                         id = key,
@@ -77,7 +83,10 @@ class StatsRepository(context: Context) {
                         wins = wins,
                         completedGames = completedGames,
                         captures = captures,
-                        losses = losses
+                        losses = losses,
+                        tokensHome = tokensHome,
+                        bestStreak = bestStreak,
+                        currentStreak = currentStreak
                     )
                 )
             }
@@ -93,7 +102,30 @@ class StatsRepository(context: Context) {
     }
 
     @Synchronized
-    fun recordCompletedGame(players: List<Player>, winner: Player) {
+    fun getStatsForPlayer(color: PlayerColor, name: String, isBot: Boolean = false): PlayerStatsRecord {
+        val dummyPlayer = Player(color = color, name = name, isBot = isBot)
+        val id = buildPlayerId(dummyPlayer)
+        return getAllStats().find { it.id == id } ?: PlayerStatsRecord(
+            id = id,
+            name = name,
+            color = color,
+            isBot = isBot,
+            wins = 0,
+            completedGames = 0,
+            captures = 0,
+            losses = 0,
+            tokensHome = 0,
+            bestStreak = 0,
+            currentStreak = 0
+        )
+    }
+
+    @Synchronized
+    fun recordCompletedGame(
+        players: List<Player>,
+        winner: Player,
+        winningColors: Set<PlayerColor> = setOf(winner.color)
+    ) {
         val currentStats = getAllStats().associateBy { it.id }.toMutableMap()
 
         for (player in players) {
@@ -106,9 +138,16 @@ class StatsRepository(context: Context) {
                 wins = 0,
                 completedGames = 0,
                 captures = 0,
-                losses = 0
+                losses = 0,
+                tokensHome = 0,
+                bestStreak = 0,
+                currentStreak = 0
             )
-            val isWinner = (player.color == winner.color && player.name == winner.name)
+            val isWinner = player.color in winningColors
+            val tokensSafelyHome = player.tokens.count { it.position is com.example.model.TokenPosition.Finished }
+            val newCurrentStreak = if (isWinner) existing.currentStreak + 1 else 0
+            val newBestStreak = maxOf(existing.bestStreak, newCurrentStreak)
+
             currentStats[id] = existing.copy(
                 name = player.name,
                 color = player.color,
@@ -116,7 +155,10 @@ class StatsRepository(context: Context) {
                 completedGames = existing.completedGames + 1,
                 wins = if (isWinner) existing.wins + 1 else existing.wins,
                 losses = if (!isWinner) existing.losses + 1 else existing.losses,
-                captures = existing.captures + player.captures
+                captures = existing.captures + player.captures,
+                tokensHome = existing.tokensHome + tokensSafelyHome,
+                bestStreak = newBestStreak,
+                currentStreak = newCurrentStreak
             )
         }
 
@@ -140,6 +182,9 @@ class StatsRepository(context: Context) {
                 put("completedGames", record.completedGames)
                 put("captures", record.captures)
                 put("losses", record.losses)
+                put("tokensHome", record.tokensHome)
+                put("bestStreak", record.bestStreak)
+                put("currentStreak", record.currentStreak)
             }
             root.put(id, obj)
         }

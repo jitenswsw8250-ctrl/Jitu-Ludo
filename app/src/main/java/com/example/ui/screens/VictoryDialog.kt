@@ -37,6 +37,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -59,7 +60,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.model.GameMode
 import com.example.model.Player
+import com.example.model.PlayerTeam
 import com.example.model.TokenPosition
 import kotlin.math.PI
 import kotlin.math.cos
@@ -82,6 +85,7 @@ fun VictoryDialog(
     podium: List<Player>,
     allPlayers: List<Player>,
     matchDurationSeconds: Long = 0L,
+    gameMode: GameMode = GameMode.LOCAL_MULTIPLAYER,
     onPlayAgain: () -> Unit,
     onHome: () -> Unit,
     onOpenStats: () -> Unit,
@@ -261,33 +265,53 @@ fun VictoryDialog(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
+                        val isTeamMode = gameMode == GameMode.TEAM_2V2
+                        val winningTeam = winner?.team ?: PlayerTeam.TEAM_A
+                        val runnerUpTeam = if (winningTeam == PlayerTeam.TEAM_A) PlayerTeam.TEAM_B else PlayerTeam.TEAM_A
+                        val winningTeammates = allPlayers.filter { it.team == winningTeam }
+                        val runnerUpTeammates = allPlayers.filter { it.team == runnerUpTeam }
+                        val winningTeamTokensHome = winningTeammates.sumOf { p -> p.tokens.count { it.position is TokenPosition.Finished } }
+                        val runnerUpTokensHome = runnerUpTeammates.sumOf { p -> p.tokens.count { it.position is TokenPosition.Finished } }
+                        val winningTeamCaptures = winningTeammates.sumOf { it.captures }
+                        val runnerUpCaptures = runnerUpTeammates.sumOf { it.captures }
+
                         Text(
-                            text = "VICTORY!",
-                            fontSize = 32.sp,
+                            text = if (isTeamMode) "TEAM VICTORY! 🏆" else "VICTORY!",
+                            fontSize = if (isTeamMode) 26.sp else 32.sp,
                             fontWeight = FontWeight.Black,
-                            letterSpacing = 3.sp,
+                            letterSpacing = 2.sp,
                             color = Color(0xFFFDE047)
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        val winnerName = winner?.name ?: "Player"
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
+                        if (isTeamMode) {
                             Text(
-                                text = winner?.avatar?.emoji ?: "👑",
-                                fontSize = 24.sp
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "$winnerName Wins The Match!",
+                                text = "${winningTeam.title} Wins The Match!",
                                 fontSize = 19.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
                                 textAlign = TextAlign.Center
                             )
+                        } else {
+                            val winnerName = winner?.name ?: "Player"
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = winner?.avatar?.emoji ?: "👑",
+                                    fontSize = 24.sp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "$winnerName Wins The Match!",
+                                    fontSize = 19.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(6.dp))
@@ -317,41 +341,206 @@ fun VictoryDialog(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Podium Rankings Card
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E0E07).copy(alpha = 0.9f)),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF78350F).copy(alpha = 0.6f))
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                        if (isTeamMode) {
+                            // 10. Special Team Victory Screen: Showing both winning teammates
+                            Text(
+                                text = "WINNING TEAMMATES",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFDE047),
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Both winning teammates presented side-by-side
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                val displayPlayers = (podium + (allPlayers - podium.toSet())).distinctBy { it.color }
-
-                                displayPlayers.forEachIndexed { index, player ->
-                                    val rankLabel = when (index) {
-                                        0 -> "1st"
-                                        1 -> "2nd"
-                                        2 -> "3rd"
-                                        else -> "4th"
+                                winningTeammates.forEach { teammate ->
+                                    Card(
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = CardDefaults.cardColors(containerColor = teammate.color.darkColor.copy(alpha = 0.55f)),
+                                        border = androidx.compose.foundation.BorderStroke(1.5.dp, teammate.color.primaryColor)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(10.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Text(text = teammate.avatar.emoji, fontSize = 28.sp)
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = teammate.name,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp,
+                                                color = Color.White,
+                                                textAlign = TextAlign.Center,
+                                                maxLines = 1
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = teammate.color.primaryColor,
+                                                modifier = Modifier.padding(vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = teammate.color.title,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            val tHome = teammate.tokens.count { it.position is TokenPosition.Finished }
+                                            Text(
+                                                text = "$tHome/4 Home 🏠",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color(0xFF86EFAC)
+                                            )
+                                            Text(
+                                                text = "⚔️ ${teammate.captures} Captures",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = Color(0xFFFBBF24)
+                                            )
+                                        }
                                     }
-                                    val rankColor = when (index) {
-                                        0 -> Color(0xFFFBBF24)
-                                        1 -> Color(0xFFCBD5E1)
-                                        2 -> Color(0xFFCD7F32)
-                                        else -> Color(0xFF94A3B8)
-                                    }
-                                    val homeCount = player.tokens.count { it.position is TokenPosition.Finished }
+                                }
+                            }
 
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Team Rankings Summary
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E0E07).copy(alpha = 0.9f)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF78350F).copy(alpha = 0.6f))
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // 1st Place Team
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(if (index == 0) player.color.darkColor.copy(alpha = 0.45f) else Color(0xFF140804).copy(alpha = 0.7f))
+                                            .background(Color(0xFF38150A))
+                                            .border(1.dp, Color(0xFFFBBF24), RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(text = "🥇", fontSize = 16.sp)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "${winningTeam.title} (Champions)",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp,
+                                                color = Color(0xFFFDE047)
+                                            )
+                                            Text(
+                                                text = winningTeammates.joinToString(" & ") { it.name },
+                                                fontSize = 11.sp,
+                                                color = Color(0xFFE2E8F0)
+                                            )
+                                        }
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                text = "$winningTeamTokensHome/8 Home",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF4ADE80)
+                                            )
+                                            Text(
+                                                text = "⚔️ $winningTeamCaptures Captures",
+                                                fontSize = 10.sp,
+                                                color = Color(0xFFFBBF24)
+                                            )
+                                        }
+                                    }
+
+                                    // 2nd Place Team
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF140804).copy(alpha = 0.7f))
+                                            .border(1.dp, Color(0xFF451A03), RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(text = "🥈", fontSize = 16.sp)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "${runnerUpTeam.title} (Runners-Up)",
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 13.sp,
+                                                color = Color(0xFFCBD5E1)
+                                            )
+                                            Text(
+                                                text = runnerUpTeammates.joinToString(" & ") { it.name },
+                                                fontSize = 11.sp,
+                                                color = Color(0xFF94A3B8)
+                                            )
+                                        }
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                text = "$runnerUpTokensHome/8 Home",
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF94A3B8)
+                                            )
+                                            Text(
+                                                text = "⚔️ $runnerUpCaptures Captures",
+                                                fontSize = 10.sp,
+                                                color = Color(0xFFCBD5E1)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // Podium Rankings Card for Free-For-All
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E0E07).copy(alpha = 0.9f)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF78350F).copy(alpha = 0.6f))
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    val displayPlayers = (podium + (allPlayers - podium.toSet())).distinctBy { it.color }
+
+                                    displayPlayers.forEachIndexed { index, player ->
+                                        val rankLabel = when (index) {
+                                            0 -> "1st"
+                                            1 -> "2nd"
+                                            2 -> "3rd"
+                                            else -> "4th"
+                                        }
+                                        val rankColor = when (index) {
+                                            0 -> Color(0xFFFBBF24)
+                                            1 -> Color(0xFFCBD5E1)
+                                            2 -> Color(0xFFCD7F32)
+                                            else -> Color(0xFF94A3B8)
+                                        }
+                                        val homeCount = player.tokens.count { it.position is TokenPosition.Finished }
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(if (index == 0) player.color.darkColor.copy(alpha = 0.45f) else Color(0xFF140804).copy(alpha = 0.7f))
                                             .border(
                                                 1.dp,
                                                 if (index == 0) player.color.primaryColor else Color(0xFF451A03),
@@ -427,6 +616,7 @@ fun VictoryDialog(
                                 }
                             }
                         }
+                    }
 
                         Spacer(modifier = Modifier.height(20.dp))
 
@@ -531,7 +721,7 @@ private fun CelebrationConfettiCanvas(modifier: Modifier = Modifier) {
     )
 
     val particles = remember {
-        List(60) {
+        List(50) {
             ConfettiParticle(
                 initialX = Random.nextFloat(),
                 initialY = Random.nextFloat() * -1f,
@@ -541,6 +731,22 @@ private fun CelebrationConfettiCanvas(modifier: Modifier = Modifier) {
                 color = confettiColors[Random.nextInt(confettiColors.size)],
                 rotationSpeed = (Random.nextFloat() - 0.5f) * 8f,
                 isCircle = Random.nextBoolean()
+            )
+        }
+    }
+
+    // Golden coins
+    val coins = remember {
+        List(14) {
+            ConfettiParticle(
+                initialX = Random.nextFloat(),
+                initialY = Random.nextFloat() * -1.2f,
+                speedY = 0.004f + Random.nextFloat() * 0.003f,
+                speedX = (Random.nextFloat() - 0.5f) * 0.0015f,
+                size = 14f + Random.nextFloat() * 8f,
+                color = Color(0xFFFFD700),
+                rotationSpeed = (Random.nextFloat() - 0.5f) * 6f,
+                isCircle = true
             )
         }
     }
@@ -557,6 +763,33 @@ private fun CelebrationConfettiCanvas(modifier: Modifier = Modifier) {
         val w = size.width
         val h = size.height
 
+        // 1. Fireworks Bursts
+        val fireworkCycle = (elapsedFrames % 180) / 180f
+        val burstCount = 12
+        val burstCenters = listOf(
+            Offset(w * 0.22f, h * 0.20f),
+            Offset(w * 0.78f, h * 0.25f),
+            Offset(w * 0.50f, h * 0.15f)
+        )
+        for ((idx, burstCenter) in burstCenters.withIndex()) {
+            val offsetCycle = ((fireworkCycle + idx * 0.33f) % 1.0f)
+            val burstRadius = offsetCycle * (cellSizeFallback() * 2.2f)
+            val burstAlpha = (1f - offsetCycle).coerceIn(0f, 1f)
+            val burstColor = if (idx == 0) Color(0xFFFFD700) else if (idx == 1) Color(0xFF38BDF8) else Color(0xFFF43F5E)
+
+            for (i in 0 until burstCount) {
+                val angle = (i * 2.0 * PI / burstCount).toFloat()
+                val sx = burstCenter.x + burstRadius * cos(angle)
+                val sy = burstCenter.y + burstRadius * sin(angle)
+                drawCircle(
+                    color = burstColor.copy(alpha = burstAlpha),
+                    radius = 3.5f * (1f - offsetCycle * 0.5f),
+                    center = Offset(sx, sy)
+                )
+            }
+        }
+
+        // 2. Confetti Particles
         for (p in particles) {
             val totalY = (p.initialY + (elapsedFrames * p.speedY)) % 1.2f
             val curY = totalY * h
@@ -582,5 +815,39 @@ private fun CelebrationConfettiCanvas(modifier: Modifier = Modifier) {
                 }
             }
         }
+
+        // 3. Falling Golden Coins
+        for (coin in coins) {
+            val totalY = (coin.initialY + (elapsedFrames * coin.speedY)) % 1.3f
+            val curY = totalY * h
+            val curX = ((coin.initialX + (elapsedFrames * coin.speedX) + sin(elapsedFrames * 0.04f + coin.initialX * 8f) * 0.02f) % 1.0f) * w
+            val normalizedX = if (curX < 0) curX + w else curX
+
+            if (curY >= 0 && curY <= h) {
+                val rot = (elapsedFrames * coin.rotationSpeed) % 360f
+                rotate(rot, pivot = Offset(normalizedX, curY)) {
+                    // Coin outer rim
+                    drawCircle(
+                        color = Color(0xFFFDE047),
+                        radius = coin.size / 2f,
+                        center = Offset(normalizedX, curY)
+                    )
+                    // Coin inner face
+                    drawCircle(
+                        color = Color(0xFFF59E0B),
+                        radius = coin.size * 0.40f,
+                        center = Offset(normalizedX, curY)
+                    )
+                    // Coin center specular glint
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.7f),
+                        radius = coin.size * 0.16f,
+                        center = Offset(normalizedX - coin.size * 0.12f, curY - coin.size * 0.12f)
+                    )
+                }
+            }
+        }
     }
 }
+
+private fun cellSizeFallback(): Float = 36f

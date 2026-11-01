@@ -10,17 +10,32 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.sp
+import com.example.model.TalkingTokenEvent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -214,6 +229,60 @@ fun LudoBoardView(
                     boardPixelSize = boardPixelSize
                 )
             }
+
+            // Talking Token Speech Bubble Overlay
+            gameState.talkingTokenEvent?.let { talkEvent ->
+                val talkPlayer = gameState.players.find { it.color == talkEvent.color }
+                val talkToken = talkPlayer?.tokens?.find { it.id == talkEvent.tokenId }
+                if (talkToken != null) {
+                    val allTokens = gameState.players.flatMap { it.tokens }
+                    val tokenCenter = getTokenDisplayCenter(talkToken, allTokens, cellSize)
+                    TalkingTokenBubbleOverlay(
+                        event = talkEvent,
+                        tokenCenter = tokenCenter,
+                        cellSize = cellSize
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TalkingTokenBubbleOverlay(
+    event: TalkingTokenEvent,
+    tokenCenter: Offset,
+    cellSize: Float
+) {
+    val bubbleWidthPx = cellSize * 2.8f
+    val bubbleHeightPx = cellSize * 0.95f
+    val bubbleX = (tokenCenter.x - bubbleWidthPx / 2f).coerceAtLeast(4f)
+    val bubbleY = (tokenCenter.y - cellSize * 1.55f).coerceAtLeast(4f)
+
+    Box(
+        modifier = Modifier
+            .offset { IntOffset(bubbleX.toInt(), bubbleY.toInt()) }
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xF21E0C04))
+            .border(
+                1.5.dp,
+                Brush.linearGradient(listOf(Color(0xFFFDE047), event.color.primaryColor, Color(0xFFFFD700))),
+                RoundedCornerShape(12.dp)
+            )
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = event.emoji, fontSize = 14.sp)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = event.phrase,
+                color = Color.White,
+                fontWeight = FontWeight.Black,
+                fontSize = 11.sp
+            )
         }
     }
 }
@@ -735,7 +804,7 @@ private fun DrawScope.drawTrackCells(cellSize: Float, boardTheme: com.example.mo
             style = Stroke(width = trackStrokeWidth)
         )
 
-        // Safe Star squares (indices 8, 21, 34, 47) with prominent circular golden medallion and colored star
+        // Safe Star squares (indices 8, 21, 34, 47) with prominent circular golden medallion, colored star and subtle lighting glow
         if (index == 8 || index == 21 || index == 34 || index == 47) {
             val starColor = when (index) {
                 8 -> Color(0xFF059669)   // Green safe star
@@ -744,6 +813,16 @@ private fun DrawScope.drawTrackCells(cellSize: Float, boardTheme: com.example.mo
                 47 -> Color(0xFFDC2626)  // Red safe star
                 else -> Color(0xFF7C3AED)
             }
+            // Subtle lighting glow halo on safe squares
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(starColor.copy(alpha = 0.35f), Color.Transparent),
+                    center = center,
+                    radius = cellSize * 0.65f
+                ),
+                radius = cellSize * 0.65f,
+                center = center
+            )
             // Circular star medallion backing with golden rim
             drawCircle(
                 color = Color(0xFFDDD6FE),
@@ -896,6 +975,43 @@ private fun DrawScope.drawTokens(gameState: GameState, cellSize: Float, pulseSca
                 )
             }
 
+            // Motion trail when token is animating movement
+            if (gameState.phase == TurnPhase.ANIMATING_MOVE && isMovable) {
+                drawCircle(
+                    color = player.color.primaryColor.copy(alpha = 0.28f),
+                    radius = tokenRadius * 1.55f,
+                    center = Offset(center.x, center.y + cellSize * 0.15f)
+                )
+                drawCircle(
+                    color = Color(0xFFFFD700).copy(alpha = 0.35f),
+                    radius = tokenRadius * 1.30f,
+                    center = Offset(center.x, center.y + cellSize * 0.08f)
+                )
+            }
+
+            // Home path entrance and home arrival celebration glow
+            if (token.position is TokenPosition.OnBoard && (token.position as TokenPosition.OnBoard).step >= 51) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0xFFFFD700).copy(alpha = 0.45f), Color.Transparent),
+                        center = center,
+                        radius = tokenRadius * 1.8f
+                    ),
+                    radius = tokenRadius * 1.8f,
+                    center = center
+                )
+            } else if (token.isFinished) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0xFFFDE047).copy(alpha = 0.55f), Color(0xFFF59E0B).copy(alpha = 0.25f), Color.Transparent),
+                        center = center,
+                        radius = tokenRadius * 1.9f
+                    ),
+                    radius = tokenRadius * 1.9f,
+                    center = center
+                )
+            }
+
             // --- 3D Pawn Rendering ---
             val skin = gameState.currentSkin
             val (bodyLight, bodyPrimary, bodyDark) = when (skin) {
@@ -905,6 +1021,11 @@ private fun DrawScope.drawTokens(gameState: GameState, cellSize: Float, pulseSca
                 com.example.model.GameSkin.SAPPHIRE -> Triple(Color(0xFFBAE6FD), Color(0xFF2563EB), Color(0xFF1E3A8A))
                 com.example.model.GameSkin.GOLD -> Triple(Color(0xFFFEF08A), Color(0xFFEAB308), Color(0xFF78350F))
                 com.example.model.GameSkin.SILVER -> Triple(Color(0xFFF8FAFC), Color(0xFF94A3B8), Color(0xFF334155))
+                com.example.model.GameSkin.DIAMOND -> Triple(Color(0xFFE0F2FE), Color(0xFF38BDF8), Color(0xFF0284C7))
+                com.example.model.GameSkin.FIRE -> Triple(Color(0xFFFDE047), Color(0xFFEA580C), Color(0xFF9A3412))
+                com.example.model.GameSkin.ICE -> Triple(Color(0xFFCFFAFE), Color(0xFF06B6D4), Color(0xFF164E63))
+                com.example.model.GameSkin.ROYAL_GOLD -> Triple(Color(0xFFFFFBEB), Color(0xFFF59E0B), Color(0xFF78350F))
+                com.example.model.GameSkin.RAINBOW -> Triple(Color(0xFFF472B6), Color(0xFFA855F7), Color(0xFF4338CA))
             }
 
             // 1. Realistic Directional Drop Shadow
