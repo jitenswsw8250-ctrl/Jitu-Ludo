@@ -2,11 +2,13 @@ package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.Path
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -92,7 +94,9 @@ import com.example.model.PlayerColor
 import com.example.model.PlayerTeam
 import com.example.model.SoundPack
 import com.example.model.TokenPosition
+import com.example.model.TurnPhase
 import com.example.ui.components.DiceControlSection
+import com.example.ui.components.FreeMovingPhysics3DDiceOverlay
 import com.example.ui.components.LudoBoardView
 import com.example.ui.components.PlayerDiceControl
 import com.example.ui.components.PlayerStatusBar
@@ -156,28 +160,50 @@ fun GameScreen(
         }
     }
 
-    val bgGradientColors = when (gameState.animatedBackground) {
-        AnimatedBackground.ROYAL_PALACE -> listOf(
-            Color(0xFF381F13), // Warm golden bronze top
-            Color(0xFF241209), // Warm chocolate brown middle
-            Color(0xFF140804)  // Deep espresso brown bottom
-        )
-        AnimatedBackground.JUNGLE -> listOf(
-            Color(0xFF0F2618), // Deep emerald jungle canopy
-            Color(0xFF0B1B11), // Moss green middle
-            Color(0xFF061009)  // Dark rainforest earth
-        )
-        AnimatedBackground.SPACE -> listOf(
-            Color(0xFF0F172A), // Cosmic midnight blue
-            Color(0xFF0B1020), // Deep nebula indigo
-            Color(0xFF030712)  // Infinite space black
-        )
-        AnimatedBackground.FESTIVAL -> listOf(
-            Color(0xFF35131C), // Royal celebratory maroon
-            Color(0xFF240B13), // Warm festive garnet
-            Color(0xFF130509)  // Deep evening mahogany
+    val cyclingThemes = remember {
+        listOf(
+            AnimatedBackground.ROYAL_GOLD,
+            AnimatedBackground.DEEP_OCEAN,
+            AnimatedBackground.EMERALD_FOREST,
+            AnimatedBackground.GALAXY,
+            AnimatedBackground.SUNSET
         )
     }
+
+    var cycleStep by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(35_000L) // Smooth cross-fade to next theme every 35 seconds of gameplay
+            cycleStep++
+        }
+    }
+
+    val activeTheme = remember(gameState.animatedBackground, cycleStep) {
+        val baseIndex = cyclingThemes.indexOf(gameState.animatedBackground)
+        if (baseIndex >= 0) {
+            cyclingThemes[(baseIndex + cycleStep) % cyclingThemes.size]
+        } else {
+            cyclingThemes[cycleStep % cyclingThemes.size]
+        }
+    }
+
+    val themeColors = activeTheme.gradientColors
+    val animTopColor by animateColorAsState(
+        targetValue = themeColors.getOrElse(0) { Color(0xFF381F13) },
+        animationSpec = tween(durationMillis = 2500, easing = LinearEasing),
+        label = "bgTopAnim"
+    )
+    val animMidColor by animateColorAsState(
+        targetValue = themeColors.getOrElse(1) { Color(0xFF241209) },
+        animationSpec = tween(durationMillis = 2500, easing = LinearEasing),
+        label = "bgMidAnim"
+    )
+    val animBottomColor by animateColorAsState(
+        targetValue = themeColors.getOrElse(2) { Color(0xFF140804) },
+        animationSpec = tween(durationMillis = 2500, easing = LinearEasing),
+        label = "bgBottomAnim"
+    )
+    val bgGradientColors = listOf(animTopColor, animMidColor, animBottomColor)
 
     BoxWithConstraints(
         modifier = modifier
@@ -189,10 +215,10 @@ fun GameScreen(
         // Calculate max available board height so that the board, dice controls, bottom actions, and reserved banner fit comfortably
         val maxBoardDimension = (screenHeight - 200.dp).coerceAtLeast(240.dp)
 
-        // Subtle Glowing Star Sparkles in Background (matching theme & avoiding board)
+        // Subtle Glowing Star Sparkles & Ambient Waves in Background (matching theme & avoiding board)
         BackgroundSparklesCanvas(
             boardBounds = boardBounds,
-            animatedBackground = gameState.animatedBackground,
+            animatedBackground = activeTheme,
             modifier = Modifier.fillMaxSize()
         )
 
@@ -547,6 +573,20 @@ fun GameScreen(
                 FloatingReactionBubble(reaction = reaction)
             }
         }
+
+        // Real Free-Moving 3D Physics Throwable Dice Overlay (Full-screen interactive physics layer)
+        FreeMovingPhysics3DDiceOverlay(
+            diceState = gameState.diceState,
+            currentPlayer = gameState.currentPlayer,
+            phase = gameState.phase,
+            isGameOver = gameState.isGameOver,
+            canRoll = (gameState.phase == TurnPhase.WAITING_FOR_ROLL && !gameState.isGameOver && !gameState.diceState.isRolling),
+            onRollDice = onRollDice,
+            skin = gameState.currentSkin,
+            screenWidthPx = constraints.maxWidth.toFloat(),
+            screenHeightPx = constraints.maxHeight.toFloat(),
+            modifier = Modifier.fillMaxSize()
+        )
     }
 
     // Settings Modal
@@ -944,6 +984,35 @@ fun BackgroundSparklesCanvas(
             exclBottom = top + estSize + boardSafetyClearance
         }
 
+        // Subtle ambient moving light waves in the background
+        val waveColor1 = animatedBackground.primaryParticleColor.copy(alpha = 0.045f)
+        val wavePath1 = Path().apply {
+            moveTo(0f, h * 0.18f + 20f * sin(t * 0.45f))
+            cubicTo(
+                w * 0.35f, h * 0.14f + 25f * cos(t * 0.35f),
+                w * 0.70f, h * 0.22f + 22f * sin(t * 0.30f),
+                w, h * 0.17f + 18f * cos(t * 0.40f)
+            )
+            lineTo(w, 0f)
+            lineTo(0f, 0f)
+            close()
+        }
+        drawPath(wavePath1, waveColor1)
+
+        val waveColor2 = animatedBackground.secondaryParticleColor.copy(alpha = 0.035f)
+        val wavePath2 = Path().apply {
+            moveTo(0f, h * 0.82f + 22f * cos(t * 0.38f))
+            cubicTo(
+                w * 0.30f, h * 0.78f + 28f * sin(t * 0.32f),
+                w * 0.65f, h * 0.86f + 24f * cos(t * 0.42f),
+                w, h * 0.83f + 19f * sin(t * 0.35f)
+            )
+            lineTo(w, h)
+            lineTo(0f, h)
+            close()
+        }
+        drawPath(wavePath2, waveColor2)
+
         for (item in SPARKLE_ITEMS) {
             val r = if (item.isLarge) 5.dp.toPx() else 3.5.dp.toPx()
             val totalRadius = r * 2.5f
@@ -1142,22 +1211,27 @@ fun BackgroundSparklesCanvas(
 
             // Dynamic particle colors matching selected ambient background theme
             val (haloBaseColor, innerBaseColor, crossBaseColor) = when (animatedBackground) {
-                AnimatedBackground.ROYAL_PALACE -> Triple(
+                AnimatedBackground.ROYAL_GOLD, AnimatedBackground.ROYAL_PALACE -> Triple(
                     Color(0xFFF59E0B), // Warm royal amber
                     Color(0xFFFEF3C7), // Warm golden cream
                     Color(0xFFFFFBEB)  // Brilliant star white
                 )
-                AnimatedBackground.JUNGLE -> Triple(
+                AnimatedBackground.DEEP_OCEAN -> Triple(
+                    Color(0xFF0284C7), // Deep oceanic cyan/blue
+                    Color(0xFFBAE6FD), // Shimmering seafoam
+                    Color(0xFFF0F9FF)  // Crystalline sea white
+                )
+                AnimatedBackground.EMERALD_FOREST, AnimatedBackground.JUNGLE -> Triple(
                     Color(0xFF10B981), // Emerald firefly glow
                     Color(0xFFA7F3D0), // Soft mint luminescence
                     Color(0xFFECFDF5)  // Pale green star
                 )
-                AnimatedBackground.SPACE -> Triple(
+                AnimatedBackground.GALAXY, AnimatedBackground.SPACE -> Triple(
                     Color(0xFF818CF8), // Deep celestial periwinkle
                     Color(0xFFC7D2FE), // Soft nebula white
                     Color(0xFFEEF2FF)  // Brilliant starlight
                 )
-                AnimatedBackground.FESTIVAL -> Triple(
+                AnimatedBackground.SUNSET, AnimatedBackground.FESTIVAL -> Triple(
                     Color(0xFFF97316), // Warm festival lantern amber
                     Color(0xFFFED7AA), // Festive peach shimmer
                     Color(0xFFFFF7ED)  // Sparkler white

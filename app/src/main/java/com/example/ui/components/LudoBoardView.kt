@@ -292,8 +292,8 @@ private fun TalkingTokenBubbleOverlay(
 // -----------------------------------------------------------------------------
 
 private fun DrawScope.drawBoardBackground(cellSize: Float, players: List<Player>) {
-    // Crisp porcelain white board background
-    drawRect(color = Color(0xFFFAFAFA), size = size)
+    // Crisp light porcelain board background matching reference photo
+    drawRect(color = Color(0xFFF1F5F9), size = size)
 
     val yardSize = cellSize * 6
 
@@ -304,320 +304,177 @@ private fun DrawScope.drawBoardBackground(cellSize: Float, players: List<Player>
 
     // 1. Emerald Green Home Quadrant (Top-Left)
     drawRect(
-        brush = Brush.radialGradient(
-            colors = listOf(
-                Color(0xFF10B981), // Vibrant emerald highlight
-                Color(0xFF059669), // Classic rich emerald
-                Color(0xFF047857), // Deep emerald
-                Color(0xFF064E3B)  // Dark forest emerald shadow
-            ),
-            center = Offset(yardSize * 0.40f, yardSize * 0.40f),
-            radius = yardSize * 0.90f
-        ),
+        color = Color(0xFF0F9D58),
         topLeft = Offset(0f, 0f),
         size = Size(yardSize, yardSize)
     )
-    // Subtle golden bevel border on home quadrant edge
-    drawRect(
-        color = Color(0xFFFBBF24).copy(alpha = 0.35f),
-        topLeft = Offset(0f, 0f),
-        size = Size(yardSize, yardSize),
-        style = Stroke(width = cellSize * 0.06f)
-    )
     drawYardBasePlate(
-        topLeft = Offset(cellSize * 0.8f, cellSize * 0.8f),
-        size = Size(cellSize * 4.4f, cellSize * 4.4f),
-        accentColor = Color(0xFF059669),
+        topLeft = Offset(cellSize * 0.75f, cellSize * 0.75f),
+        size = Size(cellSize * 4.5f, cellSize * 4.5f),
+        baseColor = Color(0xFF0F9D58),
+        recessColor = Color(0xFF0B8043),
+        socketColor = Color(0xFF075B30),
         cellSize = cellSize,
         slotOffsets = LudoBoardMap.BASE_SLOT_POINTS[PlayerColor.GREEN]!!.map { Offset(it.x * cellSize, it.y * cellSize) },
-        playerName = greenPlayer?.name,
-        playerAvatar = greenPlayer?.avatar?.emoji,
-        winChanceDisplay = greenPlayer?.formattedWinChance
+        playerName = greenPlayer?.name ?: "Green",
+        winChanceDisplay = greenPlayer?.formattedWinChance ?: "0%"
     )
 
     // 2. Golden Yellow Home Quadrant (Top-Right)
     drawRect(
-        brush = Brush.radialGradient(
-            colors = listOf(
-                Color(0xFFFEF08A), // Sunny light gold highlight
-                Color(0xFFFACC15), // Vibrant golden yellow
-                Color(0xFFEAB308), // Rich deep amber
-                Color(0xFF9A3412)  // Burnished bronze shadow
-            ),
-            center = Offset(cellSize * 12f, cellSize * 3f),
-            radius = yardSize * 0.90f
-        ),
+        color = Color(0xFFF4B400),
         topLeft = Offset(cellSize * 9f, 0f),
         size = Size(yardSize, yardSize)
     )
-    drawRect(
-        color = Color(0xFFFBBF24).copy(alpha = 0.35f),
-        topLeft = Offset(cellSize * 9f, 0f),
-        size = Size(yardSize, yardSize),
-        style = Stroke(width = cellSize * 0.06f)
-    )
     drawYardBasePlate(
-        topLeft = Offset(cellSize * 9.8f, cellSize * 0.8f),
-        size = Size(cellSize * 4.4f, cellSize * 4.4f),
-        accentColor = Color(0xFFD97706),
+        topLeft = Offset(cellSize * 9.75f, cellSize * 0.75f),
+        size = Size(cellSize * 4.5f, cellSize * 4.5f),
+        baseColor = Color(0xFFF4B400),
+        recessColor = Color(0xFFD89B00),
+        socketColor = Color(0xFF9E6E00),
         cellSize = cellSize,
         slotOffsets = LudoBoardMap.BASE_SLOT_POINTS[PlayerColor.YELLOW]!!.map { Offset(it.x * cellSize, it.y * cellSize) },
-        playerName = yellowPlayer?.name,
-        playerAvatar = yellowPlayer?.avatar?.emoji,
-        winChanceDisplay = yellowPlayer?.formattedWinChance
+        playerName = yellowPlayer?.name ?: "Yellow",
+        winChanceDisplay = yellowPlayer?.formattedWinChance ?: "0%"
     )
 
     // 3. Sapphire Blue Home Quadrant (Bottom-Right)
     drawRect(
-        brush = Brush.radialGradient(
-            colors = listOf(
-                Color(0xFF60A5FA), // Vivid sky highlight
-                Color(0xFF2563EB), // Rich royal sapphire
-                Color(0xFF1D4ED8), // Deep cobalt
-                Color(0xFF1E3A8A)  // Deep navy shadow
-            ),
-            center = Offset(cellSize * 12f, cellSize * 12f),
-            radius = yardSize * 0.90f
-        ),
+        color = Color(0xFF1A73E8),
         topLeft = Offset(cellSize * 9f, cellSize * 9f),
         size = Size(yardSize, yardSize)
     )
-    drawRect(
-        color = Color(0xFFFBBF24).copy(alpha = 0.35f),
-        topLeft = Offset(cellSize * 9f, cellSize * 9f),
-        size = Size(yardSize, yardSize),
-        style = Stroke(width = cellSize * 0.06f)
-    )
     drawYardBasePlate(
-        topLeft = Offset(cellSize * 9.8f, cellSize * 9.8f),
-        size = Size(cellSize * 4.4f, cellSize * 4.4f),
-        accentColor = Color(0xFF2563EB),
+        topLeft = Offset(cellSize * 9.75f, cellSize * 9.75f),
+        size = Size(cellSize * 4.5f, cellSize * 4.5f),
+        baseColor = Color(0xFF1A73E8),
+        recessColor = Color(0xFF1557B0),
+        socketColor = Color(0xFF0D3E7D),
         cellSize = cellSize,
         slotOffsets = LudoBoardMap.BASE_SLOT_POINTS[PlayerColor.BLUE]!!.map { Offset(it.x * cellSize, it.y * cellSize) },
-        playerName = bluePlayer?.name,
-        playerAvatar = bluePlayer?.avatar?.emoji,
-        winChanceDisplay = bluePlayer?.formattedWinChance
+        playerName = bluePlayer?.name ?: "Blue",
+        winChanceDisplay = bluePlayer?.formattedWinChance ?: "0%"
     )
 
     // 4. Royal Red Home Quadrant (Bottom-Left)
     drawRect(
-        brush = Brush.radialGradient(
-            colors = listOf(
-                Color(0xFFFB7185), // Brilliant rose highlight
-                Color(0xFFF43F5E), // Vivid ruby
-                Color(0xFFDC2626), // Royal crimson
-                Color(0xFF881337)  // Deep burgundy wine shadow
-            ),
-            center = Offset(cellSize * 3f, cellSize * 12f),
-            radius = yardSize * 0.90f
-        ),
+        color = Color(0xFFDB4437),
         topLeft = Offset(0f, cellSize * 9f),
         size = Size(yardSize, yardSize)
     )
-    drawRect(
-        color = Color(0xFFFBBF24).copy(alpha = 0.35f),
-        topLeft = Offset(0f, cellSize * 9f),
-        size = Size(yardSize, yardSize),
-        style = Stroke(width = cellSize * 0.06f)
-    )
     drawYardBasePlate(
-        topLeft = Offset(cellSize * 0.8f, cellSize * 9.8f),
-        size = Size(cellSize * 4.4f, cellSize * 4.4f),
-        accentColor = Color(0xFFDC2626),
+        topLeft = Offset(cellSize * 0.75f, cellSize * 9.75f),
+        size = Size(cellSize * 4.5f, cellSize * 4.5f),
+        baseColor = Color(0xFFDB4437),
+        recessColor = Color(0xFFB32D23),
+        socketColor = Color(0xFF7E1B13),
         cellSize = cellSize,
         slotOffsets = LudoBoardMap.BASE_SLOT_POINTS[PlayerColor.RED]!!.map { Offset(it.x * cellSize, it.y * cellSize) },
-        playerName = redPlayer?.name,
-        playerAvatar = redPlayer?.avatar?.emoji,
-        winChanceDisplay = redPlayer?.formattedWinChance
+        playerName = redPlayer?.name ?: "Red",
+        winChanceDisplay = redPlayer?.formattedWinChance ?: "0%"
     )
 }
 
 /**
- * Draws the inner rounded white plate with 4 colored socket rings for the 2x2 token layout.
+ * Draws the monochromatic recessed plate with 4 circular socket depressions,
+ * exactly matching the reference photo.
  */
 private fun DrawScope.drawYardBasePlate(
     topLeft: Offset,
     size: Size,
-    accentColor: Color,
+    baseColor: Color,
+    recessColor: Color,
+    socketColor: Color,
     cellSize: Float,
     slotOffsets: List<Offset>,
-    playerName: String? = null,
-    playerAvatar: String? = null,
-    winChanceDisplay: String? = null
+    playerName: String,
+    winChanceDisplay: String
 ) {
-    val cornerRadius = CornerRadius(cellSize * 0.70f, cellSize * 0.70f)
+    val cornerRadius = CornerRadius(cellSize * 0.65f, cellSize * 0.65f)
 
-    // 1. Realistic layered drop shadow under the base plate
+    // Inner recessed plate with soft bevel
     drawRoundRect(
-        color = Color(0x35000000),
-        topLeft = Offset(topLeft.x + 3.5f, topLeft.y + 5.0f),
-        size = size,
-        cornerRadius = cornerRadius
-    )
-    drawRoundRect(
-        color = Color(0x20000000),
-        topLeft = Offset(topLeft.x + 1.5f, topLeft.y + 2.0f),
-        size = size,
-        cornerRadius = cornerRadius
-    )
-
-    // 2. Pure porcelain satin white plate with subtle reflection gradient
-    drawRoundRect(
-        brush = Brush.verticalGradient(
-            colors = listOf(
-                Color(0xFFFFFFFF),
-                Color(0xFFF8FAFC),
-                Color(0xFFEFF6FF)
-            ),
-            startY = topLeft.y,
-            endY = topLeft.y + size.height
-        ),
+        color = recessColor,
         topLeft = topLeft,
         size = size,
         cornerRadius = cornerRadius
     )
-
-    // 3. Dual-layered polished plate border (outer slate + inner luxury gold hairline)
+    // Darker inner border shadow
     drawRoundRect(
-        color = Color(0xFFCBD5E1),
+        color = socketColor.copy(alpha = 0.55f),
         topLeft = topLeft,
         size = size,
         cornerRadius = cornerRadius,
-        style = Stroke(width = cellSize * 0.050f)
-    )
-    drawRoundRect(
-        color = Color(0xFFF59E0B).copy(alpha = 0.40f),
-        topLeft = Offset(topLeft.x + 1f, topLeft.y + 1f),
-        size = Size(size.width - 2f, size.height - 2f),
-        cornerRadius = cornerRadius,
-        style = Stroke(width = cellSize * 0.025f)
+        style = Stroke(width = cellSize * 0.045f)
     )
 
-    // 4. 4 Sockets (Recessed circular wells with 3D colored metallic rings)
+    // 4 Sockets (Recessed circular depressions matching reference photo)
     for (slot in slotOffsets) {
-        val socketRadius = cellSize * 0.46f
+        val socketRadius = cellSize * 0.48f
 
-        // Outer soft socket shadow
+        // Soft outer shadow
         drawCircle(
-            color = Color(0x25000000),
-            radius = socketRadius + 2f,
-            center = slot
+            color = Color(0x35000000),
+            radius = socketRadius + 1.5f,
+            center = Offset(slot.x + 1f, slot.y + 1.5f)
         )
 
-        // Socket well recessed porcelain fill
+        // Sunken socket fill
         drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color(0xFFFFFFFF),
-                    accentColor.copy(alpha = 0.08f),
-                    accentColor.copy(alpha = 0.20f)
-                ),
-                center = Offset(slot.x - socketRadius * 0.2f, slot.y - socketRadius * 0.2f),
-                radius = socketRadius
-            ),
+            color = socketColor,
             radius = socketRadius,
             center = slot
         )
 
-        // 3D Metallic Colored Ring with specular glint
+        // Inner upper shadow for realistic depth
         drawCircle(
-            brush = Brush.linearGradient(
-                colors = listOf(
-                    Color.White.copy(alpha = 0.90f),
-                    accentColor,
-                    accentColor.copy(alpha = 0.85f),
-                    Color(0xFF0F172A)
-                ),
-                start = Offset(slot.x - socketRadius, slot.y - socketRadius),
-                end = Offset(slot.x + socketRadius, slot.y + socketRadius)
-            ),
-            radius = socketRadius,
+            color = Color(0x40000000),
+            radius = socketRadius - cellSize * 0.04f,
             center = slot,
-            style = Stroke(width = cellSize * 0.085f)
+            style = Stroke(width = cellSize * 0.05f)
         )
 
-        // Inner subtle rim shadow
+        // Lower subtle rim highlight
         drawCircle(
-            color = Color(0x20000000),
-            radius = socketRadius - cellSize * 0.085f,
+            color = Color.White.copy(alpha = 0.22f),
+            radius = socketRadius,
             center = slot,
             style = Stroke(width = cellSize * 0.025f)
         )
     }
 
-    // Centered Player Name & Estimated Live Win Chance % Badges
-    if (playerName != null && winChanceDisplay != null) {
-        val centerX = topLeft.x + size.width / 2f
+    // Direct clean white text labels matching reference photo exactly
+    val centerX = topLeft.x + size.width / 2f
 
-        // Top Player Name Pill Badge
-        val nameBadgeWidth = cellSize * 2.85f
-        val nameBadgeHeight = cellSize * 0.52f
-        val nameBadgeX = centerX - nameBadgeWidth / 2f
-        val nameBadgeY = topLeft.y + cellSize * 0.16f
-        val nameCorner = CornerRadius(nameBadgeHeight / 2f, nameBadgeHeight / 2f)
-
-        drawRoundRect(
-            color = Color(0xEE090D16), // Dark obsidian glass
-            topLeft = Offset(nameBadgeX, nameBadgeY),
-            size = Size(nameBadgeWidth, nameBadgeHeight),
-            cornerRadius = nameCorner
-        )
-        drawRoundRect(
-            color = accentColor.copy(alpha = 0.90f),
-            topLeft = Offset(nameBadgeX, nameBadgeY),
-            size = Size(nameBadgeWidth, nameBadgeHeight),
-            cornerRadius = nameCorner,
-            style = Stroke(width = cellSize * 0.035f)
-        )
-
-        val namePaint = Paint().apply {
-            color = android.graphics.Color.WHITE
-            textSize = cellSize * 0.32f
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-        val displayName = if (!playerAvatar.isNullOrEmpty()) "$playerAvatar ${playerName.take(8)}" else playerName.take(11)
-        drawContext.canvas.nativeCanvas.drawText(
-            displayName,
-            centerX,
-            nameBadgeY + nameBadgeHeight * 0.72f,
-            namePaint
-        )
-
-        // Bottom Estimated Win Chance Pill Badge (High contrast, dark badge, bold golden text)
-        val winBadgeWidth = cellSize * 2.75f
-        val winBadgeHeight = cellSize * 0.52f
-        val winBadgeX = centerX - winBadgeWidth / 2f
-        val winBadgeY = topLeft.y + size.height - cellSize * 0.68f
-        val winCorner = CornerRadius(winBadgeHeight / 2f, winBadgeHeight / 2f)
-
-        drawRoundRect(
-            color = Color(0xEE090D16), // Premium dark translucent backing
-            topLeft = Offset(winBadgeX, winBadgeY),
-            size = Size(winBadgeWidth, winBadgeHeight),
-            cornerRadius = winCorner
-        )
-        drawRoundRect(
-            color = Color(0xFFFBBF24).copy(alpha = 0.95f), // Golden amber outline
-            topLeft = Offset(winBadgeX, winBadgeY),
-            size = Size(winBadgeWidth, winBadgeHeight),
-            cornerRadius = winCorner,
-            style = Stroke(width = cellSize * 0.040f)
-        )
-
-        val winPaint = Paint().apply {
-            color = android.graphics.Color.argb(255, 253, 224, 71) // Crisp vibrant golden yellow (#FDE047)
-            textSize = cellSize * 0.33f
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-        drawContext.canvas.nativeCanvas.drawText(
-            "Est. $winChanceDisplay",
-            centerX,
-            winBadgeY + winBadgeHeight * 0.72f,
-            winPaint
-        )
+    // Top: Player Name in bold clean white text
+    val namePaint = Paint().apply {
+        color = android.graphics.Color.WHITE
+        textSize = cellSize * 0.38f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        setShadowLayer(4f, 0f, 2f, android.graphics.Color.argb(140, 0, 0, 0))
     }
+    drawContext.canvas.nativeCanvas.drawText(
+        playerName.take(10),
+        centerX,
+        topLeft.y + cellSize * 0.46f,
+        namePaint
+    )
+
+    // Bottom: Win percentage in bold clean white text
+    val winPaint = Paint().apply {
+        color = android.graphics.Color.WHITE
+        textSize = cellSize * 0.36f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        setShadowLayer(4f, 0f, 2f, android.graphics.Color.argb(140, 0, 0, 0))
+    }
+    drawContext.canvas.nativeCanvas.drawText(
+        winChanceDisplay,
+        centerX,
+        topLeft.y + size.height - cellSize * 0.16f,
+        winPaint
+    )
 }
 
 // -----------------------------------------------------------------------------
@@ -655,55 +512,9 @@ private fun DrawScope.drawHomeTriangles(cellSize: Float) {
         cStart = Color(0xFF34D399), cMid = Color(0xFF059669), cEnd = Color(0xFF064E3B)
     )
 
-    // Crisp 3D divider lines: dark shadow line underneath and crisp white highlight line on top
-    drawLine(Color(0x55000000), Offset(tl.x + 1f, tl.y + 1f), Offset(br.x + 1f, br.y + 1f), strokeWidth = cellSize * 0.08f)
-    drawLine(Color(0x55000000), Offset(tr.x - 1f, tr.y + 1f), Offset(bl.x - 1f, bl.y + 1f), strokeWidth = cellSize * 0.08f)
-    drawLine(Color.White, tl, br, strokeWidth = cellSize * 0.065f)
-    drawLine(Color.White, tr, bl, strokeWidth = cellSize * 0.065f)
-
-    // Premium 3D Golden Crown Medallion
-    val medallionRadius = cellSize * 0.62f
-    // Soft outer shadow
-    drawCircle(
-        color = Color(0x45000000),
-        radius = medallionRadius + 2.5f,
-        center = Offset(center.x + 1f, center.y + 2.5f)
-    )
-    // Multi-tier golden gradient fill
-    drawCircle(
-        brush = Brush.radialGradient(
-            colors = listOf(
-                Color(0xFFFFFBEB), // Brilliant gold apex
-                Color(0xFFFDE047), // Sunny gold
-                Color(0xFFF59E0B), // Warm rich amber
-                Color(0xFFD97706), // Burnished gold
-                Color(0xFF78350F)  // Dark bronze rim
-            ),
-            center = Offset(center.x - medallionRadius * 0.30f, center.y - medallionRadius * 0.30f),
-            radius = medallionRadius * 1.35f
-        ),
-        radius = medallionRadius,
-        center = center
-    )
-    // Polished outer gold rim stroke
-    drawCircle(
-        color = Color(0xFFB45309),
-        radius = medallionRadius,
-        center = center,
-        style = Stroke(cellSize * 0.085f)
-    )
-    // Inner specular highlight ring
-    drawCircle(
-        color = Color.White.copy(alpha = 0.50f),
-        radius = medallionRadius - cellSize * 0.085f,
-        center = center,
-        style = Stroke(cellSize * 0.025f)
-    )
-    // Embossed 3D Crown / Star in center with faceted golden shading
-    drawStar(center = Offset(center.x + 1f, center.y + 1.5f), radius = cellSize * 0.40f, color = Color(0x60000000))
-    drawStar(center = center, radius = cellSize * 0.40f, color = Color(0xFF78350F))
-    drawStar(center = Offset(center.x - 0.5f, center.y - 0.5f), radius = cellSize * 0.36f, color = Color(0xFFFEF3C7))
-    drawStar(center = center, radius = cellSize * 0.32f, color = Color(0xFFF59E0B))
+    // Clean dividing seams between the four center triangles meeting directly at center
+    drawLine(Color.White.copy(alpha = 0.85f), tl, br, strokeWidth = cellSize * 0.05f)
+    drawLine(Color.White.copy(alpha = 0.85f), tr, bl, strokeWidth = cellSize * 0.05f)
 }
 
 private fun DrawScope.drawTriangleWithGradient(p1: Offset, p2: Offset, p3: Offset, cStart: Color, cMid: Color, cEnd: Color) {
@@ -724,12 +535,12 @@ private fun DrawScope.drawTriangleWithGradient(p1: Offset, p2: Offset, p3: Offse
 }
 
 // -----------------------------------------------------------------------------
-// Track Cells, Start Arrows, and Safe Stars (Sharp, High-Contrast Polished Path)
+// Track Cells, Start Arrows, and Safe Stars (Sharp, Clean Tiles Matching Reference Photo)
 // -----------------------------------------------------------------------------
 
 private fun DrawScope.drawTrackCells(cellSize: Float, boardTheme: com.example.model.BoardTheme) {
-    val trackBorderColor = boardTheme.trackCellBorder
-    val trackStrokeWidth = cellSize * 0.055f
+    val trackBorderColor = Color(0xFFCBD5E1)
+    val trackStrokeWidth = cellSize * 0.040f
 
     // 1. Draw all 52 outer track cells
     for ((index, coord) in LudoBoardMap.OUTER_TRACK.withIndex()) {
@@ -737,49 +548,18 @@ private fun DrawScope.drawTrackCells(cellSize: Float, boardTheme: com.example.mo
         val rectSize = Size(cellSize, cellSize)
         val center = Offset(rectTopLeft.x + cellSize / 2f, rectTopLeft.y + cellSize / 2f)
 
-        // Starting squares get exact matching colored path fills, safe star squares soft violet, others clean crisp off-white or themed fill
+        // Starting squares get exact matching colored path fills, safe star squares soft tint, others clean light tile fill
         val cellColor = when (index) {
-            0 -> Color(0xFFDC2626)  // Red start (6, 13) matching red home-lane path
-            13 -> Color(0xFF059669) // Green start (1, 6) matching green home-lane path
-            26 -> Color(0xFFD97706) // Yellow start (8, 1) matching yellow home-lane path
-            39 -> Color(0xFF2563EB) // Blue start (13, 8) matching blue home-lane path
-            8, 21, 34, 47 -> if (boardTheme == com.example.model.BoardTheme.NIGHT) Color(0xFF1E1B4B) else Color(0xFFEDE9FE)
-            else -> boardTheme.trackCellFill
+            0 -> Color(0xFFDB4437)  // Red start (6, 13)
+            13 -> Color(0xFF0F9D58) // Green start (1, 6)
+            26 -> Color(0xFFF4B400) // Yellow start (8, 1)
+            39 -> Color(0xFF1A73E8) // Blue start (13, 8)
+            8, 21, 34, 47 -> Color(0xFFFFFFFF)
+            else -> Color(0xFFFFFFFF)
         }
 
         // Cell background fill
         drawRect(color = cellColor, topLeft = rectTopLeft, size = rectSize)
-
-        // Prominent circular movement spaces / stepping stone rings inside regular white cells
-        if (index !in listOf(0, 13, 26, 39, 8, 21, 34, 47)) {
-            val waypointRadius = cellSize * 0.35f
-            val ringColor = when (boardTheme) {
-                com.example.model.BoardTheme.NIGHT -> Color(0xFF475569)
-                com.example.model.BoardTheme.ROYAL_GOLD -> Color(0xFFB45309)
-                else -> Color(0xFF94A3B8)
-            }
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = if (boardTheme == com.example.model.BoardTheme.NIGHT) {
-                        listOf(Color(0xFF334155), Color(0xFF1E293B), Color(0xFF0F172A))
-                    } else if (boardTheme == com.example.model.BoardTheme.ROYAL_GOLD) {
-                        listOf(Color(0xFFFFFBEB), Color(0xFFFEF3C7), Color(0xFFFDE68A))
-                    } else {
-                        listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9), Color(0xFFE2E8F0))
-                    },
-                    center = center,
-                    radius = waypointRadius
-                ),
-                radius = waypointRadius,
-                center = center
-            )
-            drawCircle(
-                color = ringColor,
-                radius = waypointRadius,
-                center = center,
-                style = Stroke(width = cellSize * 0.045f)
-            )
-        }
 
         // Colored entry cells (0, 13, 26, 39): Styled identically to the colored home-lane path squares
         if (index in listOf(0, 13, 26, 39)) {
@@ -804,52 +584,32 @@ private fun DrawScope.drawTrackCells(cellSize: Float, boardTheme: com.example.mo
             style = Stroke(width = trackStrokeWidth)
         )
 
-        // Safe Star squares (indices 8, 21, 34, 47) with prominent circular golden medallion, colored star and subtle lighting glow
+        // Safe Star squares (indices 8, 21, 34, 47) matching reference photo
         if (index == 8 || index == 21 || index == 34 || index == 47) {
             val starColor = when (index) {
-                8 -> Color(0xFF059669)   // Green safe star
-                21 -> Color(0xFFD97706)  // Yellow safe star
-                34 -> Color(0xFF2563EB)  // Blue safe star
-                47 -> Color(0xFFDC2626)  // Red safe star
-                else -> Color(0xFF7C3AED)
+                8 -> Color(0xFF0F9D58)   // Green safe star
+                21 -> Color(0xFFF4B400)  // Yellow safe star
+                34 -> Color(0xFF1A73E8)  // Blue safe star
+                47 -> Color(0xFFDB4437)  // Red safe star
+                else -> Color(0xFFFBBF24)
             }
-            // Subtle lighting glow halo on safe squares
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(starColor.copy(alpha = 0.35f), Color.Transparent),
-                    center = center,
-                    radius = cellSize * 0.65f
-                ),
-                radius = cellSize * 0.65f,
-                center = center
-            )
-            // Circular star medallion backing with golden rim
-            drawCircle(
-                color = Color(0xFFDDD6FE),
-                radius = cellSize * 0.38f,
-                center = center
-            )
-            drawCircle(
-                brush = Brush.linearGradient(
-                    colors = listOf(Color(0xFFFDE047), Color(0xFFD97706)),
-                    start = Offset(center.x - cellSize * 0.38f, center.y - cellSize * 0.38f),
-                    end = Offset(center.x + cellSize * 0.38f, center.y + cellSize * 0.38f)
-                ),
-                radius = cellSize * 0.38f,
-                center = center,
-                style = Stroke(width = cellSize * 0.055f)
-            )
-            // Drop shadow for the star
-            drawStar(center = Offset(center.x + 1f, center.y + 1f), radius = cellSize * 0.32f, color = Color(0x35000000))
-            drawStar(center = center, radius = cellSize * 0.32f, color = starColor)
+            // Crisp 5-point star with subtle shadow matching reference photo
+            drawStar(center = Offset(center.x + 0.8f, center.y + 1f), radius = cellSize * 0.35f, color = Color(0x35000000))
+            drawStar(center = center, radius = cellSize * 0.35f, color = starColor)
+        }
+
+        // Starting squares white star / chevron
+        if (index in listOf(0, 13, 26, 39)) {
+            drawStar(center = Offset(center.x + 0.8f, center.y + 1f), radius = cellSize * 0.32f, color = Color(0x35000000))
+            drawStar(center = center, radius = cellSize * 0.32f, color = Color.White)
         }
     }
 
-    // 2. Draw Home Lanes (5 cells per player with saturated jewel tones and dark dividing borders)
-    drawHomeLane(LudoBoardMap.RED_HOME_LANE, Color(0xFFDC2626), cellSize, trackBorderColor) // Red (Bottom Arm)
-    drawHomeLane(LudoBoardMap.GREEN_HOME_LANE, Color(0xFF059669), cellSize, trackBorderColor) // Green (Left Arm)
-    drawHomeLane(LudoBoardMap.YELLOW_HOME_LANE, Color(0xFFD97706), cellSize, trackBorderColor) // Yellow (Top Arm)
-    drawHomeLane(LudoBoardMap.BLUE_HOME_LANE, Color(0xFF2563EB), cellSize, trackBorderColor) // Blue (Right Arm)
+    // 2. Draw Home Lanes (5 cells per player with saturated tones and crisp borders)
+    drawHomeLane(LudoBoardMap.RED_HOME_LANE, Color(0xFFDB4437), cellSize, trackBorderColor) // Red (Bottom Arm)
+    drawHomeLane(LudoBoardMap.GREEN_HOME_LANE, Color(0xFF0F9D58), cellSize, trackBorderColor) // Green (Left Arm)
+    drawHomeLane(LudoBoardMap.YELLOW_HOME_LANE, Color(0xFFF4B400), cellSize, trackBorderColor) // Yellow (Top Arm)
+    drawHomeLane(LudoBoardMap.BLUE_HOME_LANE, Color(0xFF1A73E8), cellSize, trackBorderColor) // Blue (Right Arm)
 }
 
 private fun DrawScope.drawHomeLane(

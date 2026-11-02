@@ -612,6 +612,11 @@ fun SettingsDialog(
                             AnimatedBackground.values().forEach { bg ->
                                 val isSelected = animatedBackground == bg
                                 val chipColor = when (bg) {
+                                    AnimatedBackground.ROYAL_GOLD -> Color(0xFFFDE047)
+                                    AnimatedBackground.DEEP_OCEAN -> Color(0xFF38BDF8)
+                                    AnimatedBackground.EMERALD_FOREST -> Color(0xFF86EFAC)
+                                    AnimatedBackground.GALAXY -> Color(0xFFC084FC)
+                                    AnimatedBackground.SUNSET -> Color(0xFFFB7185)
                                     AnimatedBackground.ROYAL_PALACE -> Color(0xFFF59E0B)
                                     AnimatedBackground.JUNGLE -> Color(0xFF10B981)
                                     AnimatedBackground.SPACE -> Color(0xFF818CF8)

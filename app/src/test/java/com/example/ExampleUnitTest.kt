@@ -1824,7 +1824,12 @@ class ExampleUnitTest {
     @Test
     fun test_animatedBackgrounds_allFourThemesConfigured() {
         val backgrounds = AnimatedBackground.values()
-        assertEquals(4, backgrounds.size)
+        assertTrue("Must support all 5 premium themes plus legacy themes", backgrounds.size >= 5)
+        assertTrue(backgrounds.contains(AnimatedBackground.ROYAL_GOLD))
+        assertTrue(backgrounds.contains(AnimatedBackground.DEEP_OCEAN))
+        assertTrue(backgrounds.contains(AnimatedBackground.EMERALD_FOREST))
+        assertTrue(backgrounds.contains(AnimatedBackground.GALAXY))
+        assertTrue(backgrounds.contains(AnimatedBackground.SUNSET))
         assertTrue(backgrounds.contains(AnimatedBackground.ROYAL_PALACE))
         assertTrue(backgrounds.contains(AnimatedBackground.JUNGLE))
         assertTrue(backgrounds.contains(AnimatedBackground.SPACE))
@@ -1833,6 +1838,7 @@ class ExampleUnitTest {
         for (bg in backgrounds) {
             assertTrue("Background title must not be blank", bg.title.isNotBlank())
             assertTrue("Background description must not be blank", bg.description.isNotBlank())
+            assertTrue("Background gradient colors must have at least 3 tones", bg.gradientColors.size >= 3)
         }
     }
 

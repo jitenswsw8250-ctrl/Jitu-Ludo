@@ -339,40 +339,86 @@ enum class AnimatedBackground(
     val title: String,
     val description: String,
     val primaryParticleColor: Color,
-    val secondaryParticleColor: Color
+    val secondaryParticleColor: Color,
+    val gradientColors: List<Color> = listOf(Color(0xFF381F13), Color(0xFF241209), Color(0xFF140804))
 ) {
+    ROYAL_GOLD(
+        id = "royal_gold",
+        title = "Royal Gold",
+        description = "Regal amber luster, palace golden motes & warm radiance",
+        primaryParticleColor = Color(0xFFFDE047),
+        secondaryParticleColor = Color(0xFFF59E0B),
+        gradientColors = listOf(Color(0xFF381F13), Color(0xFF241209), Color(0xFF140804))
+    ),
+    DEEP_OCEAN(
+        id = "deep_ocean",
+        title = "Deep Ocean",
+        description = "Subtle aquatic currents, bioluminescent bubbles & oceanic depth",
+        primaryParticleColor = Color(0xFF38BDF8),
+        secondaryParticleColor = Color(0xFF0284C7),
+        gradientColors = listOf(Color(0xFF0C2438), Color(0xFF071725), Color(0xFF030B14))
+    ),
+    EMERALD_FOREST(
+        id = "emerald_forest",
+        title = "Emerald Forest",
+        description = "Mystical enchanted canopy, emerald fireflies & woodland glow",
+        primaryParticleColor = Color(0xFF86EFAC),
+        secondaryParticleColor = Color(0xFF10B981),
+        gradientColors = listOf(Color(0xFF0D2818), Color(0xFF081C10), Color(0xFF040F08))
+    ),
+    GALAXY(
+        id = "galaxy",
+        title = "Galaxy",
+        description = "Cosmic nebula dust, celestial starlight & deep space aurora",
+        primaryParticleColor = Color(0xFFC084FC),
+        secondaryParticleColor = Color(0xFF818CF8),
+        gradientColors = listOf(Color(0xFF1C1335), Color(0xFF110B22), Color(0xFF080413))
+    ),
+    SUNSET(
+        id = "sunset",
+        title = "Sunset",
+        description = "Vibrant dusk embers, crimson twilight radiance & warm horizon waves",
+        primaryParticleColor = Color(0xFFFB7185),
+        secondaryParticleColor = Color(0xFFF97316),
+        gradientColors = listOf(Color(0xFF3B1219), Color(0xFF270910), Color(0xFF150408))
+    ),
+    // Retain legacy entries to guarantee backwards compatibility with existing saved preferences and unit tests
     ROYAL_PALACE(
         id = "royal_palace",
         title = "Royal Palace",
         description = "Golden ambient sparkles & warm palace light",
         primaryParticleColor = Color(0xFFFDE047),
-        secondaryParticleColor = Color(0xFFF59E0B)
+        secondaryParticleColor = Color(0xFFF59E0B),
+        gradientColors = listOf(Color(0xFF381F13), Color(0xFF241209), Color(0xFF140804))
     ),
     JUNGLE(
         id = "jungle",
         title = "Jungle",
         description = "Emerald fireflies & mystical forest motes",
         primaryParticleColor = Color(0xFF86EFAC),
-        secondaryParticleColor = Color(0xFF22C55E)
+        secondaryParticleColor = Color(0xFF22C55E),
+        gradientColors = listOf(Color(0xFF0F2618), Color(0xFF0B1B11), Color(0xFF061009))
     ),
     SPACE(
         id = "space",
         title = "Cosmic Space",
         description = "Twinkling star cluster & celestial nebulae",
         primaryParticleColor = Color(0xFF38BDF8),
-        secondaryParticleColor = Color(0xFFA855F7)
+        secondaryParticleColor = Color(0xFFA855F7),
+        gradientColors = listOf(Color(0xFF0F172A), Color(0xFF0B1020), Color(0xFF030712))
     ),
     FESTIVAL(
         id = "festival",
         title = "Royal Festival",
         description = "Floating festival lanterns & celebration sparks",
         primaryParticleColor = Color(0xFFFB923C),
-        secondaryParticleColor = Color(0xFFF43F5E)
+        secondaryParticleColor = Color(0xFFF43F5E),
+        gradientColors = listOf(Color(0xFF35131C), Color(0xFF240B13), Color(0xFF130509))
     );
 
     companion object {
         fun fromId(id: String?): AnimatedBackground {
-            return values().find { it.id.equals(id, ignoreCase = true) || it.name.equals(id, ignoreCase = true) } ?: ROYAL_PALACE
+            return values().find { it.id.equals(id, ignoreCase = true) || it.name.equals(id, ignoreCase = true) } ?: ROYAL_GOLD
         }
     }
 }

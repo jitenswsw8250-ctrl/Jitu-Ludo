@@ -218,16 +218,28 @@ fun PlayerDiceControl(
 
                     Spacer(modifier = Modifier.width(6.dp))
 
-                    DiceFace(
-                        value = if (isCurrentTurn) diceState.value else 1,
-                        isRolling = if (isCurrentTurn) diceState.isRolling else false,
-                        accentColor = player.color.primaryColor,
-                        enabled = canRoll,
-                        onClick = onRollDice,
-                        diceSizeDp = 44.dp,
-                        skin = skin,
-                        modifier = if (canRoll) Modifier.testTag("roll_dice_button") else Modifier
-                    )
+                    if (canRoll) {
+                        Throwable3DDice(
+                            value = diceState.value,
+                            isRolling = diceState.isRolling,
+                            canRoll = true,
+                            playerColor = player.color,
+                            onRollDice = onRollDice,
+                            diceSizeDp = 46.dp,
+                            skin = skin,
+                            testTag = "roll_dice_button"
+                        )
+                    } else {
+                        DiceFace(
+                            value = if (isCurrentTurn) diceState.value else 1,
+                            isRolling = if (isCurrentTurn) diceState.isRolling else false,
+                            accentColor = player.color.primaryColor,
+                            enabled = false,
+                            onClick = {},
+                            diceSizeDp = 44.dp,
+                            skin = skin
+                        )
+                    }
 
                     if (canRoll) {
                         Spacer(modifier = Modifier.width(3.dp))
@@ -256,16 +268,28 @@ fun PlayerDiceControl(
                         Spacer(modifier = Modifier.width(3.dp))
                     }
 
-                    DiceFace(
-                        value = if (isCurrentTurn) diceState.value else 1,
-                        isRolling = if (isCurrentTurn) diceState.isRolling else false,
-                        accentColor = player.color.primaryColor,
-                        enabled = canRoll,
-                        onClick = onRollDice,
-                        diceSizeDp = 44.dp,
-                        skin = skin,
-                        modifier = if (canRoll) Modifier.testTag("roll_dice_button") else Modifier
-                    )
+                    if (canRoll) {
+                        Throwable3DDice(
+                            value = diceState.value,
+                            isRolling = diceState.isRolling,
+                            canRoll = true,
+                            playerColor = player.color,
+                            onRollDice = onRollDice,
+                            diceSizeDp = 46.dp,
+                            skin = skin,
+                            testTag = "roll_dice_button"
+                        )
+                    } else {
+                        DiceFace(
+                            value = if (isCurrentTurn) diceState.value else 1,
+                            isRolling = if (isCurrentTurn) diceState.isRolling else false,
+                            accentColor = player.color.primaryColor,
+                            enabled = false,
+                            onClick = {},
+                            diceSizeDp = 44.dp,
+                            skin = skin
+                        )
+                    }
 
                     Spacer(modifier = Modifier.width(6.dp))
 
