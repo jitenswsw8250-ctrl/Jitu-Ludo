@@ -283,7 +283,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         _hasSavedGame.value = false
     }
 
-    fun rollDice() {
+    fun rollDice(forcedRoll: Int? = null) {
         if (isActionLocked) return
         val state = _gameState.value
         if (state.phase != TurnPhase.WAITING_FOR_ROLL || state.diceState.isRolling || state.isGameOver) {
@@ -293,25 +293,21 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         isActionLocked = true
         viewModelScope.launch {
             try {
-                // Dice rolling animation
-                _gameState.update {
-                    it.copy(diceState = it.diceState.copy(isRolling = true))
-                }
+                _gameState.update { it.copy(diceState = it.diceState.copy(isRolling = true)) }
                 soundManager.playDiceRoll(state.soundEnabled, state.hapticsEnabled)
+                delay(550)
 
-                // Realistic 3D rolling tumble animation (~720ms: 12 steps * 60ms)
                 val curPlayerConsecutive = _gameState.value.currentPlayer?.consecutiveSixes
                     ?: _gameState.value.diceState.consecutiveSixes
-                val maxTumble = if (curPlayerConsecutive >= 2) 6 else 7
-                repeat(12) {
-                    _gameState.update {
-                        it.copy(diceState = it.diceState.copy(value = Random.nextInt(1, maxTumble)))
-                    }
-                    delay(60)
+
+                // Enforce strict consecutive-six rule:
+                // If current player already rolled two 6s, their third roll MUST NOT be 6. Allow ONLY 1..5.
+                val finalRoll = if (curPlayerConsecutive >= 2) {
+                    if (forcedRoll != null && forcedRoll in 1..5) forcedRoll else Random.nextInt(1, 6)
+                } else {
+                    forcedRoll ?: Random.nextInt(1, 7)
                 }
 
-                // Final roll resolution: strictly 1..5 if on third consecutive roll
-                val finalRoll = if (curPlayerConsecutive >= 2) Random.nextInt(1, 6) else Random.nextInt(1, 7)
                 val updatedState = LudoEngine.rollDice(_gameState.value, forcedRoll = finalRoll)
                 _gameState.update { current ->
                     updatedState.copy(

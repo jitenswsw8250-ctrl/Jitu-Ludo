@@ -188,7 +188,7 @@ fun PlayerDiceControl(
                 horizontalArrangement = Arrangement.Center
             ) {
                 if (!alignRight) {
-                    // Left aligned: [Kills/Deaths ⚔️💀] -> [Dice] -> [👈 Hand]
+                    // Left aligned: [Kills/Deaths ⚔️💀] -> [DiceFace] -> [👈 Hand / Turn Status]
                     Column(
                         horizontalAlignment = Alignment.Start,
                         verticalArrangement = Arrangement.Center
@@ -218,78 +218,108 @@ fun PlayerDiceControl(
 
                     Spacer(modifier = Modifier.width(6.dp))
 
-                    if (canRoll) {
-                        Throwable3DDice(
-                            value = diceState.value,
-                            isRolling = diceState.isRolling,
-                            canRoll = true,
-                            playerColor = player.color,
-                            onRollDice = onRollDice,
-                            diceSizeDp = 46.dp,
-                            skin = skin,
-                            testTag = "roll_dice_button"
-                        )
-                    } else {
-                        DiceFace(
-                            value = if (isCurrentTurn) diceState.value else 1,
-                            isRolling = if (isCurrentTurn) diceState.isRolling else false,
-                            accentColor = player.color.primaryColor,
-                            enabled = false,
-                            onClick = {},
-                            diceSizeDp = 44.dp,
-                            skin = skin
-                        )
-                    }
+                    DiceFace(
+                        value = if (isCurrentTurn) diceState.value else 1,
+                        isRolling = if (isCurrentTurn) diceState.isRolling else false,
+                        accentColor = player.color.primaryColor,
+                        enabled = canRoll,
+                        onClick = onRollDice,
+                        diceSizeDp = 44.dp,
+                        skin = skin,
+                        modifier = Modifier.testTag(if (canRoll) "roll_dice_button" else "player_dice_${player.color.name.lowercase()}")
+                    )
 
                     if (canRoll) {
-                        Spacer(modifier = Modifier.width(3.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Box(
                             modifier = Modifier.graphicsLayer { translationX = handOffsetX },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = "👈", fontSize = 20.sp)
+                            Text(text = "👈", fontSize = 18.sp)
                         }
                     } else if (isBotThinking) {
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(text = "🤖", fontSize = 17.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF1E293B),
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "🤖",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else if (isCurrentTurn && turnPhase == TurnPhase.SELECTING_TOKEN) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF0F766E),
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "♟️",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
                     }
                 } else {
-                    // Right aligned: [👉 Hand] <- [Dice] <- [Kills/Deaths ⚔️💀]
+                    // Right aligned: [👉 Hand / Turn Status] <- [DiceFace] <- [Kills/Deaths ⚔️💀]
                     if (canRoll) {
                         Box(
                             modifier = Modifier.graphicsLayer { translationX = -handOffsetX },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = "👉", fontSize = 20.sp)
+                            Text(text = "👉", fontSize = 18.sp)
                         }
-                        Spacer(modifier = Modifier.width(3.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                     } else if (isBotThinking) {
-                        Text(text = "🤖", fontSize = 17.sp)
-                        Spacer(modifier = Modifier.width(3.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF1E293B),
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "🤖",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                    } else if (isCurrentTurn && turnPhase == TurnPhase.SELECTING_TOKEN) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF0F766E),
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "♟️",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
                     }
 
-                    if (canRoll) {
-                        Throwable3DDice(
-                            value = diceState.value,
-                            isRolling = diceState.isRolling,
-                            canRoll = true,
-                            playerColor = player.color,
-                            onRollDice = onRollDice,
-                            diceSizeDp = 46.dp,
-                            skin = skin,
-                            testTag = "roll_dice_button"
-                        )
-                    } else {
-                        DiceFace(
-                            value = if (isCurrentTurn) diceState.value else 1,
-                            isRolling = if (isCurrentTurn) diceState.isRolling else false,
-                            accentColor = player.color.primaryColor,
-                            enabled = false,
-                            onClick = {},
-                            diceSizeDp = 44.dp,
-                            skin = skin
-                        )
-                    }
+                    DiceFace(
+                        value = if (isCurrentTurn) diceState.value else 1,
+                        isRolling = if (isCurrentTurn) diceState.isRolling else false,
+                        accentColor = player.color.primaryColor,
+                        enabled = canRoll,
+                        onClick = onRollDice,
+                        diceSizeDp = 44.dp,
+                        skin = skin,
+                        modifier = Modifier.testTag(if (canRoll) "roll_dice_button" else "player_dice_${player.color.name.lowercase()}")
+                    )
 
                     Spacer(modifier = Modifier.width(6.dp))
 
@@ -618,8 +648,7 @@ fun DiceFace(
                 enabled = enabled && !isRolling,
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
-            ) { onClick() }
-            .testTag("dice_face_button"),
+            ) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.size(diceSizeDp)) {

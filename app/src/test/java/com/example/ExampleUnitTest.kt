@@ -2152,6 +2152,79 @@ class ExampleUnitTest {
             assertEquals("50%", p.estimatedWinChanceText)
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Restored In-Panel Dice System Tests (Roll Resolution, Consecutive Six Rule, Skin Support, Turn Handling)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun test_restoredDice_rollAccuracyPassedToEngine() {
+        val player = Player(color = PlayerColor.RED, name = "Red", tokens = listOf(Token(id = 0, color = PlayerColor.RED, position = TokenPosition.InBase)))
+        val state = GameState(players = listOf(player), currentTurnIndex = 0, phase = TurnPhase.WAITING_FOR_ROLL)
+
+        for (settledValue in 1..6) {
+            val rolledState = LudoEngine.rollDice(state, forcedRoll = settledValue)
+            assertEquals("Engine roll result must precisely match the rolled value", settledValue, rolledState.diceState.value)
+            assertFalse("Rolling state must clear to false once settled", rolledState.diceState.isRolling)
+        }
+    }
+
+    @Test
+    fun test_restoredDice_consecutiveSixRuleEnforcesNonSixOnThirdRoll() {
+        val player = Player(color = PlayerColor.RED, name = "Red", consecutiveSixes = 2, tokens = listOf(Token(id = 0, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 10))))
+        val state = GameState(players = listOf(player), currentTurnIndex = 0, phase = TurnPhase.WAITING_FOR_ROLL, diceState = DiceState(value = 6, consecutiveSixes = 2))
+
+        // On third consecutive roll, engine must NEVER allow 6
+        val rolledStateForced6 = LudoEngine.rollDice(state, forcedRoll = 6)
+        assertTrue("Third roll must be between 1 and 5 (never 6)", rolledStateForced6.diceState.value in 1..5)
+
+        for (i in 1..25) {
+            val autoRolled = LudoEngine.rollDice(state)
+            assertTrue("Automatic roll on 3rd consecutive roll must NEVER produce 6", autoRolled.diceState.value in 1..5)
+            assertEquals(0, autoRolled.diceState.consecutiveSixes)
+        }
+    }
+
+    @Test
+    fun test_restoredDice_skinCompatibilityForAllElevenSkins() {
+        // Ensure all 11 GameSkins have proper titles and attributes for rendering
+        val allSkins = GameSkin.values()
+        assertEquals(11, allSkins.size)
+        allSkins.forEach { skin ->
+            assertNotNull("Skin title must not be null", skin.title)
+            assertNotNull("Skin description must not be null", skin.description)
+            assertNotNull("Primary tone must not be null", skin.primaryTone)
+            assertNotNull("Accent tone must not be null", skin.accentTone)
+            assertNotNull("Rim tone must not be null", skin.rimTone)
+        }
+    }
+
+    @Test
+    fun test_restoredDice_bonusTurnAwardedOnRollingSix() {
+        val token = Token(id = 0, color = PlayerColor.RED, position = TokenPosition.InBase)
+        val player = Player(color = PlayerColor.RED, name = "Red", tokens = listOf(token))
+        val state = GameState(players = listOf(player), currentTurnIndex = 0, phase = TurnPhase.WAITING_FOR_ROLL)
+
+        val rolledState = LudoEngine.rollDice(state, forcedRoll = 6)
+        assertEquals(TurnPhase.SELECTING_TOKEN, rolledState.phase)
+        assertTrue("Rolling 6 must enable token to leave base", rolledState.movableTokenIds.contains(0))
+
+        val moveOutcome = LudoEngine.executeMove(rolledState, 0)
+        assertTrue("Rolling 6 must grant a bonus turn", moveOutcome.hasBonusTurn)
+    }
+
+    @Test
+    fun test_restoredDice_turnTransitionsWhenNoLegalMoves() {
+        val token = Token(id = 0, color = PlayerColor.RED, position = TokenPosition.InBase)
+        val player1 = Player(color = PlayerColor.RED, name = "Red", tokens = listOf(token))
+        val player2 = Player(color = PlayerColor.GREEN, name = "Green", tokens = listOf(token.copy(id = 4, color = PlayerColor.GREEN)))
+        val state = GameState(players = listOf(player1, player2), currentTurnIndex = 0, phase = TurnPhase.WAITING_FOR_ROLL)
+
+        // Rolling 3 with all tokens in base: no moves possible
+        val rolledState = LudoEngine.rollDice(state, forcedRoll = 3)
+        assertEquals(TurnPhase.TURN_TRANSITION, rolledState.phase)
+        assertTrue("Movable token IDs must be empty when no legal move", rolledState.movableTokenIds.isEmpty())
+    }
 }
 
 

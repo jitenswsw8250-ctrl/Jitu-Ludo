@@ -62,6 +62,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -96,7 +97,6 @@ import com.example.model.SoundPack
 import com.example.model.TokenPosition
 import com.example.model.TurnPhase
 import com.example.ui.components.DiceControlSection
-import com.example.ui.components.FreeMovingPhysics3DDiceOverlay
 import com.example.ui.components.LudoBoardView
 import com.example.ui.components.PlayerDiceControl
 import com.example.ui.components.PlayerStatusBar
@@ -106,7 +106,7 @@ import com.example.ui.components.TopPlayerProfileCard
 @Composable
 fun GameScreen(
     gameState: GameState,
-    onRollDice: () -> Unit,
+    onRollDice: (Int?) -> Unit,
     onTokenClicked: (Int) -> Unit,
     onRestartGame: () -> Unit,
     onNavigateHome: () -> Unit,
@@ -263,7 +263,7 @@ fun GameScreen(
                         turnPhase = gameState.phase,
                         diceState = gameState.diceState,
                         isGameOver = gameState.isGameOver,
-                        onRollDice = onRollDice,
+                        onRollDice = { onRollDice(null) },
                         alignRight = false,
                         skin = gameState.currentSkin,
                         extraTurnReason = gameState.extraTurnReason
@@ -279,7 +279,7 @@ fun GameScreen(
                         turnPhase = gameState.phase,
                         diceState = gameState.diceState,
                         isGameOver = gameState.isGameOver,
-                        onRollDice = onRollDice,
+                        onRollDice = { onRollDice(null) },
                         alignRight = true,
                         skin = gameState.currentSkin,
                         extraTurnReason = gameState.extraTurnReason
@@ -335,7 +335,7 @@ fun GameScreen(
                         turnPhase = gameState.phase,
                         diceState = gameState.diceState,
                         isGameOver = gameState.isGameOver,
-                        onRollDice = onRollDice,
+                        onRollDice = { onRollDice(null) },
                         alignRight = false,
                         skin = gameState.currentSkin,
                         extraTurnReason = gameState.extraTurnReason
@@ -368,7 +368,7 @@ fun GameScreen(
                         turnPhase = gameState.phase,
                         diceState = gameState.diceState,
                         isGameOver = gameState.isGameOver,
-                        onRollDice = onRollDice,
+                        onRollDice = { onRollDice(null) },
                         alignRight = true,
                         skin = gameState.currentSkin,
                         extraTurnReason = gameState.extraTurnReason
@@ -573,20 +573,6 @@ fun GameScreen(
                 FloatingReactionBubble(reaction = reaction)
             }
         }
-
-        // Real Free-Moving 3D Physics Throwable Dice Overlay (Full-screen interactive physics layer)
-        FreeMovingPhysics3DDiceOverlay(
-            diceState = gameState.diceState,
-            currentPlayer = gameState.currentPlayer,
-            phase = gameState.phase,
-            isGameOver = gameState.isGameOver,
-            canRoll = (gameState.phase == TurnPhase.WAITING_FOR_ROLL && !gameState.isGameOver && !gameState.diceState.isRolling),
-            onRollDice = onRollDice,
-            skin = gameState.currentSkin,
-            screenWidthPx = constraints.maxWidth.toFloat(),
-            screenHeightPx = constraints.maxHeight.toFloat(),
-            modifier = Modifier.fillMaxSize()
-        )
     }
 
     // Settings Modal

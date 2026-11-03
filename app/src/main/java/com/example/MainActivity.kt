@@ -129,7 +129,7 @@ fun LudoAppRoot(
         AppScreen.GAME -> {
             GameScreen(
                 gameState = gameState,
-                onRollDice = { viewModel.rollDice() },
+                onRollDice = { forcedRoll -> viewModel.rollDice(forcedRoll) },
                 onTokenClicked = { tokenId -> viewModel.selectToken(tokenId) },
                 onRestartGame = {
                     viewModel.clearActiveReaction()
