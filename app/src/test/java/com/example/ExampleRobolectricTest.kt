@@ -9,7 +9,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34])
 class ExampleRobolectricTest {
 
   @Test
@@ -197,6 +197,61 @@ class ExampleRobolectricTest {
     assertEquals(2, updatedStats.wins)
     assertEquals(2, updatedStats.bestStreak)
     assertEquals(2, updatedStats.currentStreak)
+  }
+
+  @Test
+  fun `menu music setting defaults to true, toggles cleanly, and restores on reset`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val settingsRepo = com.example.data.SettingsRepository(context)
+
+    // Must default to true (enabled out-of-the-box)
+    org.junit.Assert.assertTrue(settingsRepo.isMusicEnabled())
+    org.junit.Assert.assertTrue(settingsRepo.isStartupMusicEnabled())
+
+    // Can be toggled off
+    settingsRepo.setMusicEnabled(false)
+    org.junit.Assert.assertFalse(settingsRepo.isMusicEnabled())
+
+    // Reset settings restores default to true
+    settingsRepo.resetToDefaults()
+    org.junit.Assert.assertTrue(settingsRepo.isMusicEnabled())
+  }
+
+  @Test
+  fun `menu music resource exists and sound manager lifecycle methods succeed without crashing`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+
+    // Verify offline bundled audio file exists and can be opened
+    val rawResId = R.raw.menu_music
+    org.junit.Assert.assertTrue("R.raw.menu_music must exist", rawResId != 0)
+    val rawStream = context.resources.openRawResource(rawResId)
+    org.junit.Assert.assertNotNull(rawStream)
+    org.junit.Assert.assertTrue("Audio file must have content", rawStream.available() > 1000)
+    rawStream.close()
+
+    // Test SoundManager lifecycle methods with menu background music
+    val soundManager = com.example.sound.SoundManager(context)
+    soundManager.startMenuMusic(enabled = false, volume = 0.8f) // disabled branch
+    soundManager.startMenuMusic(enabled = true, volume = 0.8f)  // enabled branch
+    soundManager.pauseMenuMusic()
+    soundManager.resumeMenuMusic(enabled = true)
+    soundManager.stopMenuMusic(fadeDurationMs = 50L)
+    soundManager.release()
+  }
+
+  @Test
+  fun `gameplay sound effects remain separate from menu music`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val soundManager = com.example.sound.SoundManager(context)
+
+    // Gameplay sounds must be executable without touching menu music state
+    soundManager.playDiceRoll(soundEnabled = true, hapticsEnabled = false)
+    soundManager.playMove(soundEnabled = true, hapticsEnabled = false)
+    soundManager.playCapture(soundEnabled = true, hapticsEnabled = false)
+    soundManager.playVictory(soundEnabled = true, hapticsEnabled = false)
+
+    // Cleanup
+    soundManager.release()
   }
 }
 

@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +49,16 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onPause() {
+        super.onPause()
+        viewModel.pauseMenuMusic()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.resumeMenuMusic()
+    }
 }
 
 @Composable
@@ -67,7 +78,20 @@ fun LudoAppRoot(
     val playerStats by viewModel.playerStats.collectAsState()
     val matchHistory by viewModel.matchHistory.collectAsState()
     val hasSavedGame by viewModel.hasSavedGame.collectAsState()
+    val musicEnabled by viewModel.musicEnabled.collectAsState()
     val context = LocalContext.current
+
+    // Menu Background Music:
+    // Plays automatically ONLY on the HOME/menu screen when enabled.
+    // Stops immediately when gameplay begins or leaving the home screen.
+    // Resumes automatically when returning to the home screen.
+    LaunchedEffect(currentScreen, musicEnabled) {
+        if (currentScreen == AppScreen.HOME && musicEnabled) {
+            viewModel.startMenuMusic()
+        } else {
+            viewModel.stopMenuMusic(200L)
+        }
+    }
 
     when (currentScreen) {
         AppScreen.SPLASH -> {
@@ -81,10 +105,13 @@ fun LudoAppRoot(
             HomeScreen(
                 soundEnabled = gameState.soundEnabled,
                 hapticsEnabled = gameState.hapticsEnabled,
+                startupMusicEnabled = musicEnabled,
                 onToggleSound = { viewModel.toggleSound() },
+                onToggleStartupMusic = { viewModel.toggleMusic() },
                 onToggleHaptics = { viewModel.toggleHaptics() },
                 hasSavedGame = hasSavedGame,
                 onResumeGame = {
+                    viewModel.stopMenuMusic(0L)
                     if (viewModel.resumeSavedGame()) {
                         currentScreen = AppScreen.GAME
                     }
@@ -94,6 +121,7 @@ fun LudoAppRoot(
                 boardTheme = gameState.boardTheme,
                 onSetBoardTheme = { viewModel.setBoardTheme(it) },
                 onStartGame = { mode, count, color, names, avatars ->
+                    viewModel.stopMenuMusic(0L)
                     viewModel.startNewGame(
                         mode = mode,
                         playerCount = count,
@@ -161,6 +189,8 @@ fun LudoAppRoot(
                 onToggleTalkingTokens = { viewModel.toggleTalkingTokens() },
                 onSetAnimatedBackground = { viewModel.setAnimatedBackground(it) },
                 onPreviewSoundPack = { viewModel.previewSoundPack(it) },
+                startupMusicEnabled = musicEnabled,
+                onToggleStartupMusic = { viewModel.toggleMusic() },
                 modifier = modifier
             )
         }
@@ -205,7 +235,9 @@ fun LudoAppRoot(
             soundVolume = gameState.soundVolume,
             talkingTokensEnabled = gameState.talkingTokensEnabled,
             animatedBackground = gameState.animatedBackground,
+            startupMusicEnabled = musicEnabled,
             onToggleSound = { viewModel.toggleSound() },
+            onToggleStartupMusic = { viewModel.toggleMusic() },
             onToggleHaptics = { viewModel.toggleHaptics() },
             onSetAnimationSpeed = { viewModel.setAnimationSpeed(it) },
             onSetAiDifficulty = { viewModel.setAiDifficulty(it) },

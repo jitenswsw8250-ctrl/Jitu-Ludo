@@ -8,6 +8,11 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.Path
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -35,7 +40,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -224,7 +232,7 @@ fun PlayerDiceControl(
                         accentColor = player.color.primaryColor,
                         enabled = canRoll,
                         onClick = onRollDice,
-                        diceSizeDp = 44.dp,
+                        diceSizeDp = 52.dp,
                         skin = skin,
                         modifier = Modifier.testTag(if (canRoll) "roll_dice_button" else "player_dice_${player.color.name.lowercase()}")
                     )
@@ -316,7 +324,7 @@ fun PlayerDiceControl(
                         accentColor = player.color.primaryColor,
                         enabled = canRoll,
                         onClick = onRollDice,
-                        diceSizeDp = 44.dp,
+                        diceSizeDp = 52.dp,
                         skin = skin,
                         modifier = Modifier.testTag(if (canRoll) "roll_dice_button" else "player_dice_${player.color.name.lowercase()}")
                     )
@@ -355,295 +363,142 @@ fun PlayerDiceControl(
     }
 }
 
-@Composable
-fun DiceControlSection(
-    player: Player?,
-    diceState: DiceState,
-    turnPhase: TurnPhase,
-    isGameOver: Boolean,
-    onRollDice: () -> Unit,
-    modifier: Modifier = Modifier,
-    skin: GameSkin = GameSkin.CLASSIC,
-    extraTurnReason: String? = null
-) {
-    val canRoll = !isGameOver && (turnPhase == TurnPhase.WAITING_FOR_ROLL) && (player?.isBot == false) && !diceState.isRolling
+/**
+ * 3D Vector for real spatial transformations.
+ */
+data class Vec3(val x: Float, val y: Float, val z: Float) {
+    operator fun plus(other: Vec3) = Vec3(x + other.x, y + other.y, z + other.z)
+    operator fun minus(other: Vec3) = Vec3(x - other.x, y - other.y, z - other.z)
+    operator fun times(scalar: Float) = Vec3(x * scalar, y * scalar, z * scalar)
 
-    val infiniteTransition = rememberInfiniteTransition(label = "diceSectionAnim")
-    val handOffsetX by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(500, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "handBounceAnim"
-    )
+    fun rotateX(radians: Float): Vec3 {
+        val c = cos(radians)
+        val s = sin(radians)
+        return Vec3(x, y * c - z * s, y * s + z * c)
+    }
 
-    val borderGlowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.50f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(650, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "borderGlow"
-    )
+    fun rotateY(radians: Float): Vec3 {
+        val c = cos(radians)
+        val s = sin(radians)
+        return Vec3(x * c + z * s, y, -x * s + z * c)
+    }
 
-    val playerColor = player?.color?.primaryColor ?: Color(0xFFFBBF24)
+    fun rotateZ(radians: Float): Vec3 {
+        val c = cos(radians)
+        val s = sin(radians)
+        return Vec3(x * c - y * s, x * s + y * c, z)
+    }
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp)
-            .testTag("dice_section_card"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF26130C).copy(alpha = 0.85f)
-        ),
-        border = androidx.compose.foundation.BorderStroke(
-            width = if (canRoll) 2.dp else 1.5.dp,
-            brush = if (canRoll) {
-                Brush.linearGradient(
-                    listOf(
-                        Color(0xFFFFD700).copy(alpha = borderGlowAlpha),
-                        playerColor.copy(alpha = borderGlowAlpha),
-                        Color(0xFFFDE047).copy(alpha = borderGlowAlpha)
-                    )
-                )
-            } else {
-                Brush.linearGradient(listOf(Color(0xFF4A2818), Color(0xFF2A150A)))
-            }
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (canRoll) 6.dp else 4.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(
-                    horizontalAlignment = Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "⚔️", fontSize = 14.sp)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "${player?.captures ?: 0}",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        )
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "💀", fontSize = 14.sp)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "${player?.losses ?: 0}",
-                            color = Color(0xFFE2E8F0),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                DiceFace(
-                    value = diceState.value,
-                    isRolling = diceState.isRolling,
-                    accentColor = player?.color?.primaryColor ?: Color(0xFFE53935),
-                    enabled = canRoll,
-                    onClick = onRollDice,
-                    skin = skin
-                )
-
-                if (canRoll) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .graphicsLayer { translationX = handOffsetX }
-                            .padding(start = 2.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "👈",
-                            fontSize = 26.sp,
-                            modifier = Modifier.padding(2.dp)
-                        )
-                    }
-                }
-            }
-
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.Center
-            ) {
-                if (!extraTurnReason.isNullOrEmpty()) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFFE11D48),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE047)),
-                        modifier = Modifier.padding(bottom = 3.dp)
-                    ) {
-                        Text(
-                            text = "BONUS TURN! 🎲",
-                            color = Color.White,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 10.sp,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                } else if (diceState.consecutiveSixes > 0) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFFDC2626),
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    ) {
-                        Text(
-                            text = "SIX x${diceState.consecutiveSixes} 🔥",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    player?.avatar?.let {
-                        Text(text = it.emoji, fontSize = 16.sp)
-                        Spacer(modifier = Modifier.width(4.dp))
-                    }
-                    Text(
-                        text = player?.name ?: "Player",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = Color.White
-                    )
-                }
-
-                Text(
-                    text = when {
-                        isGameOver -> "Game Over"
-                        diceState.isRolling -> "Rolling..."
-                        turnPhase == TurnPhase.WAITING_FOR_ROLL -> if (player?.isBot == true) "Bot thinking..." else "Your turn: Roll!"
-                        turnPhase == TurnPhase.SELECTING_TOKEN -> if (player?.isBot == true) "Bot moving..." else "Select token"
-                        else -> "Playing..."
-                    },
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFFFBBF24)
-                )
-
-                if (canRoll) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Button(
-                        onClick = onRollDice,
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF16A34A)
-                        ),
-                        modifier = Modifier
-                            .height(34.dp)
-                            .testTag("roll_dice_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Casino,
-                            contentDescription = "Roll",
-                            modifier = Modifier.size(16.dp),
-                            tint = Color.White
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "ROLL", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
-                    }
-                }
-            }
-        }
+    fun rotate(rotXRad: Float, rotYRad: Float, rotZRad: Float): Vec3 {
+        return this.rotateX(rotXRad).rotateY(rotYRad).rotateZ(rotZRad)
     }
 }
 
+/**
+ * Geometric definition of one of the 6 faces on a 3D dice cube.
+ */
+private data class CubeFaceDef(
+    val faceNumber: Int,
+    val center: Vec3,
+    val uAxis: Vec3,
+    val vAxis: Vec3,
+    val normal: Vec3,
+    val pipCoords: List<Pair<Float, Float>>
+)
+
+private fun getCubeFaces(s: Float): List<CubeFaceDef> {
+    val left = -0.52f
+    val right = 0.52f
+    val top = -0.52f
+    val bottom = 0.52f
+
+    val pips1 = listOf(0f to 0f)
+    val pips2 = listOf(left to top, right to bottom)
+    val pips3 = listOf(left to top, 0f to 0f, right to bottom)
+    val pips4 = listOf(left to top, right to top, left to bottom, right to bottom)
+    val pips5 = listOf(left to top, right to top, 0f to 0f, left to bottom, right to bottom)
+    val pips6 = listOf(left to top, right to top, left to 0f, right to 0f, left to bottom, right to bottom)
+
+    return listOf(
+        // Face 1: Front (Z = +s, normal points directly toward camera)
+        CubeFaceDef(1, Vec3(0f, 0f, s), Vec3(1f, 0f, 0f), Vec3(0f, 1f, 0f), Vec3(0f, 0f, 1f), pips1),
+        // Face 2: Top (Y = -s, normal points upward)
+        CubeFaceDef(2, Vec3(0f, -s, 0f), Vec3(1f, 0f, 0f), Vec3(0f, 0f, 1f), Vec3(0f, -1f, 0f), pips2),
+        // Face 3: Right (X = +s, normal points right)
+        CubeFaceDef(3, Vec3(s, 0f, 0f), Vec3(0f, 0f, -1f), Vec3(0f, 1f, 0f), Vec3(1f, 0f, 0f), pips3),
+        // Face 4: Left (X = -s, normal points left)
+        CubeFaceDef(4, Vec3(-s, 0f, 0f), Vec3(0f, 0f, 1f), Vec3(0f, 1f, 0f), Vec3(-1f, 0f, 0f), pips4),
+        // Face 5: Bottom (Y = +s, normal points downward)
+        CubeFaceDef(5, Vec3(0f, s, 0f), Vec3(1f, 0f, 0f), Vec3(0f, 0f, -1f), Vec3(0f, 1f, 0f), pips5),
+        // Face 6: Back (Z = -s, normal points into screen)
+        CubeFaceDef(6, Vec3(0f, 0f, -s), Vec3(-1f, 0f, 0f), Vec3(0f, 1f, 0f), Vec3(0f, 0f, -1f), pips6)
+    )
+}
+
+/**
+ * Returns (targetRotXDeg, targetRotYDeg) to bring the specified face exactly
+ * forward (flat, level, facing camera, upright).
+ */
+private fun getTargetAngles(face: Int): Pair<Float, Float> = when (face) {
+    1 -> 0f to 0f
+    2 -> -90f to 0f
+    3 -> 0f to -90f
+    4 -> 0f to 90f
+    5 -> 90f to 0f
+    6 -> 0f to 180f
+    else -> 0f to 0f
+}
+
+/**
+ * RECOGNIZABLE PREMIUM 3D METALLIC GOLDEN CASINO DICE:
+ * - Real 3D cube with 6 clearly visible golden faces.
+ * - Elegant dark royal-blue accents ONLY on the edges/perimeter.
+ * - Traditional circular jet-black dice dots (pips) in authentic 1 to 6 arrangements.
+ * - Bold, prominent size filling the player dice area (no tiny box/tile).
+ * - Full 3D tumbling rotation around both X and Y axes over 800ms.
+ * - Settles squarely, completely flat, upright on the target face without tilt or distortion.
+ * - Single fixed dice object per player turn; anti-spam touch handling.
+ */
 @Composable
 fun DiceFace(
     value: Int,
-    isRolling: Boolean,
-    accentColor: Color,
     enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    diceSizeDp: Dp = 54.dp,
+    diceSizeDp: Dp = 52.dp,
+    accentColor: Color = Color(0xFFF59E0B),
+    isRolling: Boolean = false,
     skin: GameSkin = GameSkin.CLASSIC
 ) {
-    val rotationZ = remember { Animatable(0f) }
-    val rotationX = remember { Animatable(0f) }
-    val rotationY = remember { Animatable(0f) }
-    val bounceY = remember { Animatable(0f) }
-    val scale = remember { Animatable(1f) }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "sixGlowPulse")
-    val sixGlowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.40f,
-        targetValue = 0.90f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(650, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "sixGlow"
-    )
+    val rollProgress = remember { Animatable(1f) }
 
     LaunchedEffect(isRolling) {
         if (isRolling) {
-            launch {
-                rotationZ.animateTo(
-                    targetValue = rotationZ.value + 720f,
-                    animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing)
-                )
-            }
-            launch {
-                rotationX.animateTo(
-                    targetValue = rotationX.value + 540f,
-                    animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing)
-                )
-            }
-            launch {
-                rotationY.animateTo(
-                    targetValue = rotationY.value + 360f,
-                    animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing)
-                )
-            }
-            launch {
-                // Realistic physical bounce: lift into air, tumble, drop with slight rebound & smooth settle
-                bounceY.animateTo(-16f, tween(180, easing = FastOutSlowInEasing))
-                bounceY.animateTo(-6f, tween(200, easing = LinearEasing))
-                bounceY.animateTo(-10f, tween(120, easing = FastOutSlowInEasing))
-                bounceY.animateTo(0f, tween(200, easing = FastOutSlowInEasing))
-            }
-            launch {
-                scale.animateTo(1.18f, tween(200, easing = FastOutSlowInEasing))
-                scale.animateTo(1.08f, tween(250, easing = LinearEasing))
-                scale.animateTo(0.94f, tween(120, easing = FastOutSlowInEasing))
-                scale.animateTo(1.0f, tween(130, easing = FastOutSlowInEasing))
-            }
+            rollProgress.snapTo(0f)
+            rollProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing)
+            )
+        } else {
+            rollProgress.snapTo(1f)
         }
     }
 
-    val isSixRolled = value == 6 && !isRolling
+    val targetValue = value.coerceIn(1, 6)
+    val (targetX, targetY) = getTargetAngles(targetValue)
+
+    val p = rollProgress.value
+    val remaining = 1f - p
+
+    // 2-3 full 360° rotations on both X and Y with natural 3D tumble
+    val currentRotX = targetX + 720f * remaining
+    val currentRotY = targetY + 1080f * remaining
+    val currentRotZ = sin(p * PI.toFloat()) * 25f * remaining
+    val bounceY = sin(p * PI.toFloat()) * -14f
 
     Box(
         modifier = modifier
             .size(diceSizeDp)
-            .scale(scale.value)
-            .graphicsLayer {
-                this.rotationZ = rotationZ.value
-                this.rotationX = rotationX.value
-                this.rotationY = rotationY.value
-                this.translationY = bounceY.value * density
-                this.cameraDistance = 16f * density
-            }
-            .clip(RoundedCornerShape(12.dp))
             .clickable(
                 enabled = enabled && !isRolling,
                 indication = null,
@@ -653,200 +508,206 @@ fun DiceFace(
     ) {
         Canvas(modifier = Modifier.size(diceSizeDp)) {
             val dSize = size.width
-            val pad = dSize * 0.06f
-            val corner = dSize * 0.24f
+            val originX = dSize / 2f
+            val originY = dSize / 2f
+            val s = dSize * 0.38f
+            val camDist = dSize * 4.0f
 
-            // 0. Golden Glow Halo when a six is rolled!
-            if (isSixRolled) {
-                drawRoundRect(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFFFFD700).copy(alpha = sixGlowAlpha),
-                            Color(0xFFF59E0B).copy(alpha = sixGlowAlpha * 0.6f),
-                            Color.Transparent
-                        ),
-                        center = Offset(dSize / 2f, dSize / 2f),
-                        radius = dSize * 0.72f
-                    ),
-                    topLeft = Offset(-2f, -2f),
-                    size = Size(dSize + 4f, dSize + 4f),
-                    cornerRadius = CornerRadius(corner * 1.1f, corner * 1.1f)
+            // 1. Soft 3D drop shadow reacting to physical bounce
+            val shadowLiftFactor = (bounceY / -14f).coerceIn(0f, 1f)
+            val shadowAlpha = 0.36f - shadowLiftFactor * 0.16f
+            val shadowRadiusX = s * (1.15f + shadowLiftFactor * 0.18f)
+            val shadowRadiusY = s * 0.28f
+
+            drawOval(
+                color = Color.Black.copy(alpha = shadowAlpha.coerceIn(0.10f, 0.40f)),
+                topLeft = Offset(originX - shadowRadiusX, dSize * 0.84f),
+                size = Size(shadowRadiusX * 2f, shadowRadiusY * 2f)
+            )
+
+            // Convert angles to radians
+            val rotXRad = currentRotX * (PI.toFloat() / 180f)
+            val rotYRad = currentRotY * (PI.toFloat() / 180f)
+            val rotZRad = currentRotZ * (PI.toFloat() / 180f)
+
+            fun project(point3D: Vec3): Offset {
+                val factor = camDist / (camDist - point3D.z)
+                return Offset(
+                    originX + point3D.x * factor,
+                    originY + point3D.y * factor + bounceY
                 )
             }
 
-            // 1. Outer Dark Bezel / Shadow
-            drawRoundRect(
-                color = Color(0x66000000),
-                topLeft = Offset(2f, 4f),
-                size = Size(dSize - 4f, dSize - 4f),
-                cornerRadius = CornerRadius(corner, corner)
+            // Directional lighting from top-left-front
+            val lightDir = Vec3(-0.35f, -0.60f, 0.70f)
+
+            // Data class for visible face rendering with depth sorting
+            data class VisibleFace(
+                val faceDef: CubeFaceDef,
+                val rotCenter: Vec3,
+                val rotU: Vec3,
+                val rotV: Vec3,
+                val rotNormal: Vec3,
+                val corners: List<Offset>,
+                val lightFactor: Float
             )
 
-            // 2. Outer Bezel Border (All 11 skins supported)
-            val bezelColors = when (skin) {
-                GameSkin.CLASSIC -> listOf(Color(0xFF1E3A8A), Color(0xFF0F172A), Color(0xFF1E3A8A))
-                GameSkin.RUBY -> listOf(Color(0xFF9F1239), Color(0xFF4C0519), Color(0xFF9F1239))
-                GameSkin.EMERALD -> listOf(Color(0xFF065F46), Color(0xFF022C22), Color(0xFF065F46))
-                GameSkin.SAPPHIRE -> listOf(Color(0xFF1E40AF), Color(0xFF0F172A), Color(0xFF1E40AF))
-                GameSkin.GOLD -> listOf(Color(0xFFB45309), Color(0xFF451A03), Color(0xFFB45309))
-                GameSkin.SILVER -> listOf(Color(0xFF475569), Color(0xFF0F172A), Color(0xFF475569))
-                GameSkin.DIAMOND -> listOf(Color(0xFF0369A1), Color(0xFF082F49), Color(0xFF0369A1))
-                GameSkin.FIRE -> listOf(Color(0xFF9A3412), Color(0xFF431407), Color(0xFF9A3412))
-                GameSkin.ICE -> listOf(Color(0xFF155E75), Color(0xFF083344), Color(0xFF155E75))
-                GameSkin.ROYAL_GOLD -> listOf(Color(0xFF78350F), Color(0xFF451A03), Color(0xFF78350F))
-                GameSkin.RAINBOW -> listOf(Color(0xFF6B21A8), Color(0xFF312E81), Color(0xFF6B21A8))
-            }
-            drawRoundRect(
-                brush = Brush.linearGradient(
-                    colors = bezelColors,
-                    start = Offset(0f, 0f),
-                    end = Offset(dSize, dSize)
-                ),
-                topLeft = Offset(pad * 0.5f, pad * 0.5f),
-                size = Size(dSize - pad, dSize - pad),
-                cornerRadius = CornerRadius(corner, corner)
-            )
+            val visibleFaces = mutableListOf<VisibleFace>()
 
-            // 3. Die Face Base with 3D gradient (All 11 skins supported)
-            val innerPad = pad * 1.8f
-            val faceColors = when (skin) {
-                GameSkin.CLASSIC -> listOf(Color(0xFFFFFBEB), Color(0xFFFDE68A), Color(0xFFF59E0B), Color(0xFFD97706))
-                GameSkin.RUBY -> listOf(Color(0xFFFFF1F2), Color(0xFFFDA4AF), Color(0xFFF43F5E), Color(0xFFBE123C))
-                GameSkin.EMERALD -> listOf(Color(0xFFF0FDF4), Color(0xFFA7F3D0), Color(0xFF10B981), Color(0xFF047857))
-                GameSkin.SAPPHIRE -> listOf(Color(0xFFEFF6FF), Color(0xFFBAE6FD), Color(0xFF38BDF8), Color(0xFF0284C7))
-                GameSkin.GOLD -> listOf(Color(0xFFFEFCE8), Color(0xFFFEF08A), Color(0xFFFACC15), Color(0xFFCA8A04))
-                GameSkin.SILVER -> listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9), Color(0xFFCBD5E1), Color(0xFF64748B))
-                GameSkin.DIAMOND -> listOf(Color(0xFFF0F9FF), Color(0xFFBAE6FD), Color(0xFF38BDF8), Color(0xFF0284C7))
-                GameSkin.FIRE -> listOf(Color(0xFFFFFBEB), Color(0xFFFDE047), Color(0xFFEA580C), Color(0xFF9A3412))
-                GameSkin.ICE -> listOf(Color(0xFFECFEFF), Color(0xFFA5F3FC), Color(0xFF06B6D4), Color(0xFF0E7490))
-                GameSkin.ROYAL_GOLD -> listOf(Color(0xFFFFFBEB), Color(0xFFFDE047), Color(0xFFF59E0B), Color(0xFFB45309))
-                GameSkin.RAINBOW -> listOf(Color(0xFFFDF4FF), Color(0xFFF472B6), Color(0xFFA855F7), Color(0xFF6366F1))
-            }
+            val faces = getCubeFaces(s)
+            for (face in faces) {
+                val rotCenter = face.center.rotate(rotXRad, rotYRad, rotZRad)
+                val rotU = face.uAxis.rotate(rotXRad, rotYRad, rotZRad)
+                val rotV = face.vAxis.rotate(rotXRad, rotYRad, rotZRad)
+                val rotNormal = face.normal.rotate(rotXRad, rotYRad, rotZRad)
 
-            drawRoundRect(
-                brush = Brush.verticalGradient(
-                    colors = faceColors
-                ),
-                topLeft = Offset(innerPad, innerPad),
-                size = Size(dSize - innerPad * 2, dSize - innerPad * 2),
-                cornerRadius = CornerRadius(corner * 0.8f, corner * 0.8f)
-            )
+                // 4 corners of the face quad
+                val c0 = rotCenter - rotU * s - rotV * s
+                val c1 = rotCenter + rotU * s - rotV * s
+                val c2 = rotCenter + rotU * s + rotV * s
+                val c3 = rotCenter - rotU * s + rotV * s
 
-            // Lucky 6 Celebration: Corner Sparkle Star Bursts
-            if (isSixRolled) {
-                val sparkleOffsets = listOf(
-                    Offset(pad * 0.8f, pad * 0.8f),
-                    Offset(dSize - pad * 0.8f, pad * 0.8f),
-                    Offset(pad * 0.8f, dSize - pad * 0.8f),
-                    Offset(dSize - pad * 0.8f, dSize - pad * 0.8f)
-                )
-                for (sp in sparkleOffsets) {
-                    drawCircle(
-                        color = Color(0xFFFFFBEB).copy(alpha = sixGlowAlpha),
-                        radius = dSize * 0.055f,
-                        center = sp
+                val p0 = project(c0)
+                val p1 = project(c1)
+                val p2 = project(c2)
+                val p3 = project(c3)
+
+                // Back-face culling via 2D cross-product
+                val cross = (p1.x - p0.x) * (p2.y - p0.y) - (p1.y - p0.y) * (p2.x - p0.x)
+                if (cross <= 0.05f) continue // Face is angled away from viewer
+
+                // Compute directional illumination
+                val dot = (rotNormal.x * lightDir.x + rotNormal.y * lightDir.y + rotNormal.z * lightDir.z) / 0.986f
+                val lightFactor = ((dot + 1f) / 2f).coerceIn(0.42f, 1.0f)
+
+                visibleFaces.add(
+                    VisibleFace(
+                        faceDef = face,
+                        rotCenter = rotCenter,
+                        rotU = rotU,
+                        rotV = rotV,
+                        rotNormal = rotNormal,
+                        corners = listOf(p0, p1, p2, p3),
+                        lightFactor = lightFactor
                     )
+                )
+            }
+
+            // Painter's algorithm: sort back-to-front (smaller Z is farther, larger Z is closer to camera)
+            val sortedFaces = visibleFaces.sortedBy { it.rotCenter.z }
+
+            for (vf in sortedFaces) {
+                val lf = vf.lightFactor
+                val p0 = vf.corners[0]
+                val p1 = vf.corners[1]
+                val p2 = vf.corners[2]
+                val p3 = vf.corners[3]
+
+                // --- 1. Beautiful Metallic Golden Face Body ---
+                val outerPath = Path().apply {
+                    moveTo(p0.x, p0.y)
+                    lineTo(p1.x, p1.y)
+                    lineTo(p2.x, p2.y)
+                    lineTo(p3.x, p3.y)
+                    close()
+                }
+
+                val goldHighlight = Color(
+                    red = (1.0f * lf).coerceIn(0.58f, 1.0f),
+                    green = (0.92f * lf).coerceIn(0.50f, 0.98f),
+                    blue = (0.50f * lf).coerceIn(0.20f, 0.70f),
+                    alpha = 1.0f
+                )
+                val goldCore = Color(
+                    red = (1.0f * lf).coerceIn(0.52f, 1.0f),
+                    green = (0.84f * lf).coerceIn(0.42f, 0.92f),
+                    blue = (0.16f * lf).coerceIn(0.06f, 0.35f),
+                    alpha = 1.0f
+                )
+                val goldMid = Color(
+                    red = (0.92f * lf).coerceIn(0.45f, 0.95f),
+                    green = (0.70f * lf).coerceIn(0.32f, 0.78f),
+                    blue = (0.10f * lf).coerceIn(0.04f, 0.25f),
+                    alpha = 1.0f
+                )
+                val goldShade = Color(
+                    red = (0.75f * lf).coerceIn(0.35f, 0.80f),
+                    green = (0.52f * lf).coerceIn(0.22f, 0.60f),
+                    blue = (0.05f * lf).coerceIn(0.02f, 0.15f),
+                    alpha = 1.0f
+                )
+
+                // Lustrous metallic gold gradient across the entire face
+                drawPath(
+                    path = outerPath,
+                    brush = Brush.linearGradient(
+                        colors = listOf(goldHighlight, goldCore, goldMid, goldShade),
+                        start = p0,
+                        end = p2
+                    )
+                )
+
+                // --- 2. Elegant Dark Royal-Blue Accents ONLY on the Edges ---
+                val edgeBlue = Color(
+                    red = (0.06f * lf).coerceIn(0.02f, 0.18f),
+                    green = (0.10f * lf).coerceIn(0.04f, 0.26f),
+                    blue = (0.32f * lf).coerceIn(0.12f, 0.52f),
+                    alpha = 0.95f
+                )
+                drawPath(outerPath, color = edgeBlue, style = Stroke(width = 2.2f))
+
+                // Fine inner champagne gold bevel line along the perimeter
+                val innerBevelGold = Color(
+                    red = (1.0f * lf).coerceIn(0.55f, 1.0f),
+                    green = (0.94f * lf).coerceIn(0.48f, 0.96f),
+                    blue = (0.65f * lf).coerceIn(0.28f, 0.78f),
+                    alpha = 0.65f
+                )
+                drawPath(outerPath, color = innerBevelGold, style = Stroke(width = 0.9f))
+
+                // --- 3. Traditional Deep Black Circular Pips (Dice Dots) ---
+                for ((pu, pv) in vf.faceDef.pipCoords) {
+                    val pip3D = vf.rotCenter + vf.rotU * (s * pu) + vf.rotV * (s * pv)
+                    val pipScreen = project(pip3D)
+                    val pipPerspectiveFactor = camDist / (camDist - pip3D.z)
+                    // Face 1 has a slightly larger classic casino center dot
+                    val basePipRadius = if (vf.faceDef.faceNumber == 1) s * 0.17f else s * 0.13f
+                    val pipRadius = basePipRadius * pipPerspectiveFactor
+
+                    // Recessed carved drop shadow at top-left
                     drawCircle(
-                        color = Color(0xFFFFD700).copy(alpha = sixGlowAlpha * 0.7f),
-                        radius = dSize * 0.09f,
-                        center = sp
+                        color = Color(0x45000000),
+                        radius = pipRadius * 1.10f,
+                        center = Offset(pipScreen.x - 0.7f, pipScreen.y - 0.7f)
+                    )
+                    // High-contrast solid deep black circular pip core
+                    drawCircle(
+                        color = Color(0xFF0F172A),
+                        radius = pipRadius,
+                        center = pipScreen
+                    )
+                    // Subtle specular glint on the glossy pip
+                    drawCircle(
+                        color = Color.White.copy(alpha = (0.42f * lf).coerceIn(0.15f, 0.60f)),
+                        radius = pipRadius * 0.28f,
+                        center = Offset(pipScreen.x + pipRadius * 0.25f, pipScreen.y + pipRadius * 0.25f)
                     )
                 }
             }
 
-            // 4. Inner Rim Bevel Stroke
-            val rimStrokeColor = if (isSixRolled) Color(0xFFFFD700) else Color.White.copy(alpha = 0.85f)
-            drawRoundRect(
-                brush = Brush.linearGradient(
-                    colors = listOf(rimStrokeColor, skin.rimTone),
-                    start = Offset(innerPad, innerPad),
-                    end = Offset(dSize - innerPad, dSize - innerPad)
-                ),
-                topLeft = Offset(innerPad, innerPad),
-                size = Size(dSize - innerPad * 2, dSize - innerPad * 2),
-                cornerRadius = CornerRadius(corner * 0.8f, corner * 0.8f),
-                style = Stroke(width = if (isSixRolled || enabled) 2.5f else 1.5f)
-            )
-
-            // 5. Draw Golden Flower / Die Pips Motif
-            drawPips(value, accentColor, dSize, isSix = (value == 6))
-        }
-    }
-}
-
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPips(
-    value: Int,
-    accentColor: Color,
-    dieSize: Float,
-    isSix: Boolean = false
-) {
-    val pipRadius = dieSize * 0.082f
-    val c = dieSize / 2f
-    val left = dieSize * 0.30f
-    val right = dieSize * 0.70f
-    val top = dieSize * 0.30f
-    val bottom = dieSize * 0.70f
-
-    val pipColor = if (isSix) Color(0xFFDC2626) else Color(0xFF1E293B)
-
-    fun pip(x: Float, y: Float) {
-        if (!isSix) {
-            // Subtle luminous pip accent for numbers 1-5
-            drawCircle(
-                color = accentColor.copy(alpha = 0.25f),
-                radius = pipRadius * 1.35f,
-                center = Offset(x, y)
-            )
-        }
-        drawCircle(color = pipColor, radius = pipRadius, center = Offset(x, y))
-        // Subtle shiny reflection in center of pip
-        drawCircle(color = Color.White.copy(alpha = 0.55f), radius = pipRadius * 0.35f, center = Offset(x - pipRadius * 0.2f, y - pipRadius * 0.2f))
-    }
-
-    when (value) {
-        1 -> {
-            // Draw 6-petal flower motif
-            val petalRadius = dieSize * 0.055f
-            val petalDist = dieSize * 0.11f
-            for (i in 0 until 6) {
-                val angle = i * (Math.PI / 3.0)
-                val px = (c + Math.cos(angle) * petalDist).toFloat()
-                val py = (c + Math.sin(angle) * petalDist).toFloat()
-                drawCircle(color = Color.White, radius = petalRadius, center = Offset(px, py))
+            // 4. Vibrant glowing border when waiting for the active player's roll
+            if (enabled && !isRolling) {
+                drawRoundRect(
+                    color = Color(0xFFFFD700).copy(alpha = 0.55f),
+                    topLeft = Offset(1.5f, 1.5f),
+                    size = Size(dSize - 3f, dSize - 3f),
+                    cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx()),
+                    style = Stroke(width = 1.8f)
+                )
             }
-            // Center flower core
-            drawCircle(color = Color(0xFFDC2626), radius = dieSize * 0.065f, center = Offset(c, c))
-            drawCircle(color = Color.White, radius = dieSize * 0.025f, center = Offset(c, c))
-        }
-        2 -> {
-            pip(left, top)
-            pip(right, bottom)
-        }
-        3 -> {
-            pip(left, top)
-            pip(c, c)
-            pip(right, bottom)
-        }
-        4 -> {
-            pip(left, top)
-            pip(right, top)
-            pip(left, bottom)
-            pip(right, bottom)
-        }
-        5 -> {
-            pip(left, top)
-            pip(right, top)
-            pip(c, c)
-            pip(left, bottom)
-            pip(right, bottom)
-        }
-        6 -> {
-            pip(left, top)
-            pip(right, top)
-            pip(left, c)
-            pip(right, c)
-            pip(left, bottom)
-            pip(right, bottom)
         }
     }
 }
+
+
+

@@ -5,6 +5,7 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.media.MediaPlayer
 import android.media.SoundPool
 import android.media.ToneGenerator
 import android.os.Build
@@ -908,7 +909,120 @@ class SoundManager(private val context: Context) {
         return out
     }
 
+    private var menuMediaPlayer: MediaPlayer? = null
+    private val menuMusicLock = Any()
+
+    /**
+     * Starts playing pleasant, cheerful, looping Ludo-themed instrumental background music
+     * on the home/menu screen after the splash screen finishes.
+     * Uses locally bundled raw audio (res/raw/menu_music.mp3).
+     * Respects user's music ON/OFF setting, device volume, and keeps volume moderate.
+     */
+    fun startMenuMusic(enabled: Boolean, volume: Float = masterVolume) {
+        if (!enabled || !isMediaVolumeAudible()) {
+            stopMenuMusic(0L)
+            return
+        }
+        synchronized(menuMusicLock) {
+            try {
+                if (menuMediaPlayer?.isPlaying == true) {
+                    return // Prevent duplicate music players or overlapping audio
+                }
+                stopMenuMusic(0L)
+                val player = MediaPlayer.create(context, com.example.R.raw.menu_music) ?: return
+                // Moderate volume so it is pleasant and not overwhelming (~45-55% of master volume)
+                val effectiveVol = (volume * masterVolume * 0.50f).coerceIn(0.0f, 1.0f)
+                player.setVolume(effectiveVol, effectiveVol)
+                player.isLooping = true
+                player.start()
+                menuMediaPlayer = player
+                Log.d(tag, "Menu background music started (looping, moderate volume)")
+            } catch (e: Exception) {
+                Log.e(tag, "Error starting menu music", e)
+            }
+        }
+    }
+
+    /**
+     * Stops menu background music immediately or smoothly when gameplay begins or leaving the menu.
+     * Guaranteed: ABSOLUTELY NO background music plays during gameplay!
+     */
+    fun stopMenuMusic(fadeDurationMs: Long = 200L) {
+        synchronized(menuMusicLock) {
+            val player = menuMediaPlayer ?: return
+            menuMediaPlayer = null
+            if (fadeDurationMs <= 0L) {
+                try {
+                    if (player.isPlaying) {
+                        player.stop()
+                    }
+                    player.release()
+                } catch (_: Exception) {}
+            } else {
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        val steps = 8
+                        val stepDelay = max(10L, fadeDurationMs / steps)
+                        val startVol = (masterVolume * 0.50f).coerceIn(0.0f, 1.0f)
+                        for (i in 1..steps) {
+                            val factor = (steps - i).toFloat() / steps.toFloat()
+                            val v = startVol * factor
+                            try {
+                                player.setVolume(v, v)
+                            } catch (_: Exception) {
+                                break
+                            }
+                            delay(stepDelay)
+                        }
+                        if (player.isPlaying) {
+                            player.stop()
+                        }
+                        player.release()
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+    }
+
+    fun pauseMenuMusic() {
+        synchronized(menuMusicLock) {
+            try {
+                if (menuMediaPlayer?.isPlaying == true) {
+                    menuMediaPlayer?.pause()
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun resumeMenuMusic(enabled: Boolean = true) {
+        if (!enabled || !isMediaVolumeAudible()) return
+        synchronized(menuMusicLock) {
+            try {
+                if (menuMediaPlayer != null) {
+                    if (menuMediaPlayer?.isPlaying == false) {
+                        menuMediaPlayer?.start()
+                    }
+                } else {
+                    startMenuMusic(enabled = true)
+                }
+            } catch (_: Exception) {
+                startMenuMusic(enabled = true)
+            }
+        }
+    }
+
+    // Backwards-compatible aliases
+    fun playStartupMusic(enabled: Boolean, volume: Float = masterVolume) {
+        // Menu music now starts on home screen after splash
+    }
+    fun stopStartupMusic(fadeDurationMs: Long = 0L) {
+        // No-op for splash screen
+    }
+    fun pauseStartupMusic() = pauseMenuMusic()
+    fun resumeStartupMusic() = resumeMenuMusic(true)
+
     fun release() {
+        stopMenuMusic(0L)
         try {
             soundPool?.release()
             soundPool = null

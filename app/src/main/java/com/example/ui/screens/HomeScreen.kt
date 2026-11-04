@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
@@ -99,7 +100,9 @@ import com.example.model.PlayerTeam
 fun HomeScreen(
     soundEnabled: Boolean,
     hapticsEnabled: Boolean,
+    startupMusicEnabled: Boolean = true,
     onToggleSound: () -> Unit,
+    onToggleStartupMusic: () -> Unit = {},
     onToggleHaptics: () -> Unit,
     hasSavedGame: Boolean = false,
     onResumeGame: () -> Unit = {},
@@ -239,11 +242,13 @@ fun HomeScreen(
                     onThemeSelected = onSetBoardTheme
                 )
 
-                // 6. GAME SETTINGS (Sound & Vibration)
+                // 6. GAME SETTINGS (Sound, Startup Music & Vibration)
                 GameSettingsCard(
                     soundEnabled = soundEnabled,
                     hapticsEnabled = hapticsEnabled,
+                    startupMusicEnabled = startupMusicEnabled,
                     onToggleSound = onToggleSound,
+                    onToggleStartupMusic = onToggleStartupMusic,
                     onToggleHaptics = onToggleHaptics
                 )
 
@@ -1401,7 +1406,9 @@ private fun BoardThemeSelectionCard(
 private fun GameSettingsCard(
     soundEnabled: Boolean,
     hapticsEnabled: Boolean,
+    startupMusicEnabled: Boolean,
     onToggleSound: () -> Unit,
+    onToggleStartupMusic: () -> Unit,
     onToggleHaptics: () -> Unit
 ) {
     Card(
@@ -1461,6 +1468,20 @@ private fun GameSettingsCard(
                     modifier = Modifier.weight(1f)
                 )
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Menu Background Music Pill Card
+            SettingTogglePill(
+                icon = Icons.Default.MusicNote,
+                iconTint = Color(0xFFA78BFA),
+                title = "Menu Music",
+                subtitle = "Plays on home menu only",
+                checked = startupMusicEnabled,
+                onCheckedChange = { onToggleStartupMusic() },
+                testTag = "music_toggle",
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

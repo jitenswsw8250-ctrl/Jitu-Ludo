@@ -75,6 +75,13 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
     private val _hasSavedGame = MutableStateFlow(false)
     val hasSavedGame: StateFlow<Boolean> = _hasSavedGame.asStateFlow()
 
+    private val _musicEnabled = MutableStateFlow(settingsRepository.isMusicEnabled())
+    val musicEnabled: StateFlow<Boolean> = _musicEnabled.asStateFlow()
+    val menuMusicEnabled: StateFlow<Boolean> get() = _musicEnabled
+    val startupMusicEnabled: StateFlow<Boolean> get() = _musicEnabled
+
+    val soundManagerInstance: SoundManager get() = soundManager
+
     private var botJob: Job? = null
     private var autoMoveJob: Job? = null
     private var captureDismissJob: Job? = null
@@ -148,6 +155,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         clearActiveReaction()
         isActionLocked = false
         hasRecordedGameCompletion = false
+        soundManager.stopMenuMusic(0L)
 
         val selectedColors = if (mode == GameMode.TEAM_2V2) {
             // Team A: Red + Yellow (sitting opposite), Team B: Green + Blue (sitting opposite)
@@ -271,6 +279,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         moveJob?.cancel()
         isActionLocked = false
         hasRecordedGameCompletion = false
+        soundManager.stopMenuMusic(0L)
 
         _gameState.value = loaded
         _hasSavedGame.value = true
@@ -293,9 +302,9 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         isActionLocked = true
         viewModelScope.launch {
             try {
+                // 1. Visibly trigger smooth 3D rolling animation on active player's dice
                 _gameState.update { it.copy(diceState = it.diceState.copy(isRolling = true)) }
                 soundManager.playDiceRoll(state.soundEnabled, state.hapticsEnabled)
-                delay(550)
 
                 val curPlayerConsecutive = _gameState.value.currentPlayer?.consecutiveSixes
                     ?: _gameState.value.diceState.consecutiveSixes
@@ -307,6 +316,9 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     forcedRoll ?: Random.nextInt(1, 7)
                 }
+
+                // 2. Smooth natural roll duration (800ms) before settling on final face
+                delay(800)
 
                 val updatedState = LudoEngine.rollDice(_gameState.value, forcedRoll = finalRoll)
                 _gameState.update { current ->
@@ -755,6 +767,48 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun toggleMusic() {
+        val next = !_musicEnabled.value
+        _musicEnabled.value = next
+        settingsRepository.setMusicEnabled(next)
+        if (next) {
+            soundManager.playButtonClick(_gameState.value.soundEnabled)
+            soundManager.startMenuMusic(enabled = true, volume = settingsRepository.getSoundVolume())
+        } else {
+            soundManager.stopMenuMusic(150L)
+        }
+    }
+
+    fun toggleStartupMusic() = toggleMusic()
+
+    fun startMenuMusic() {
+        if (_musicEnabled.value) {
+            soundManager.startMenuMusic(enabled = true, volume = settingsRepository.getSoundVolume())
+        }
+    }
+
+    fun stopMenuMusic(fadeDurationMs: Long = 200L) {
+        soundManager.stopMenuMusic(fadeDurationMs)
+    }
+
+    fun pauseMenuMusic() {
+        soundManager.pauseMenuMusic()
+    }
+
+    fun resumeMenuMusic() {
+        if (_musicEnabled.value) {
+            soundManager.resumeMenuMusic(enabled = true)
+        }
+    }
+
+    fun playStartupMusic() {
+        // Startup music transitioned to home screen menu background music
+    }
+
+    fun stopStartupMusic(fadeDurationMs: Long = 0L) {
+        // Splash screen no longer plays background music
+    }
+
     fun playButtonClick() {
         soundManager.playButtonClick(_gameState.value.soundEnabled)
     }
@@ -876,6 +930,7 @@ class LudoViewModel(application: Application) : AndroidViewModel(application) {
         settingsRepository.resetToDefaults()
         soundManager.setSoundPack(SoundPack.CLASSIC)
         soundManager.setVolume(1.0f)
+        _musicEnabled.value = true
         _gameState.update {
             it.copy(
                 soundEnabled = true,

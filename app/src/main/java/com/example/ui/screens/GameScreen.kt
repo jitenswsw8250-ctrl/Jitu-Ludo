@@ -95,8 +95,6 @@ import com.example.model.PlayerColor
 import com.example.model.PlayerTeam
 import com.example.model.SoundPack
 import com.example.model.TokenPosition
-import com.example.model.TurnPhase
-import com.example.ui.components.DiceControlSection
 import com.example.ui.components.LudoBoardView
 import com.example.ui.components.PlayerDiceControl
 import com.example.ui.components.PlayerStatusBar
@@ -124,6 +122,8 @@ fun GameScreen(
     onToggleTalkingTokens: () -> Unit = {},
     onSetAnimatedBackground: (AnimatedBackground) -> Unit = {},
     onPreviewSoundPack: (SoundPack) -> Unit = {},
+    startupMusicEnabled: Boolean = true,
+    onToggleStartupMusic: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showRulesDialog by remember { mutableStateOf(false) }
@@ -588,7 +588,9 @@ fun GameScreen(
             soundVolume = gameState.soundVolume,
             talkingTokensEnabled = gameState.talkingTokensEnabled,
             animatedBackground = gameState.animatedBackground,
+            startupMusicEnabled = startupMusicEnabled,
             onToggleSound = onToggleSound,
+            onToggleStartupMusic = onToggleStartupMusic,
             onToggleHaptics = onToggleHaptics,
             onSetAnimationSpeed = onSetAnimationSpeed,
             onSetSoundPack = onSetSoundPack,

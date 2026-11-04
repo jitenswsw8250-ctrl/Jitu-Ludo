@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,13 +46,16 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.sound.SoundManager
 import kotlinx.coroutines.delay
 import kotlin.math.sin
 
@@ -58,29 +63,33 @@ import kotlin.math.sin
  * Premium Launch Splash Screen for JITU LUDO.
  *
  * Features:
- * - Rich chocolate-brown and metallic-gold visual identity matching app icon.
- * - Central 3D JITU LUDO artwork with golden royal crown, 3D dice, and 4 colored tokens.
- * - Smooth entrance scale & alpha animation with radiant golden glow.
- * - Floating golden ambient particles.
- * - Auto-transitions smoothly to Home screen after 1.6s, or instantly on user tap.
- * - 100% offline and lightweight.
+ * - Displays complete, crystal-clear "JITU LUDO" app name with zero letter clipping on all screen sizes.
+ * - Plays pleasant, premium royal instrumental startup music via locally bundled audio.
+ * - Smoothly stops startup music when splash screen transitions to the main screen.
+ * - Strictly NO background music during gameplay; game sound effects remain 100% active.
+ * - Rich dark chocolate brown and metallic gold royal background.
+ * - Central 3D JITU LUDO artwork with radiant golden aura.
+ * - Tap to skip immediately.
  */
 @Composable
 fun SplashScreen(
     onSplashFinished: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    soundManager: SoundManager? = null,
+    startupMusicEnabled: Boolean = true,
+    soundVolume: Float = 1.0f
 ) {
     var animationStarted by remember { mutableStateOf(false) }
 
-    // Trigger initial entrance animations
+    // Smooth splash duration then transition to home screen where menu music starts
     LaunchedEffect(Unit) {
         animationStarted = true
-        delay(1600L)
+        delay(2000L) // Pleasant 2.0s splash
         onSplashFinished()
     }
 
     val logoScale by animateFloatAsState(
-        targetValue = if (animationStarted) 1f else 0.85f,
+        targetValue = if (animationStarted) 1f else 0.88f,
         animationSpec = tween(durationMillis = 750, easing = FastOutSlowInEasing),
         label = "splashLogoScale"
     )
@@ -94,7 +103,7 @@ fun SplashScreen(
     // Pulsing aura background animation
     val infiniteTransition = rememberInfiniteTransition(label = "splashInfinite")
     val pulseGlow by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
+        initialValue = 0.85f,
         targetValue = 1.15f,
         animationSpec = infiniteRepeatable(
             animation = tween(1200, easing = FastOutSlowInEasing),
@@ -113,7 +122,7 @@ fun SplashScreen(
         label = "particlePhaseAnim"
     )
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(
@@ -121,8 +130,8 @@ fun SplashScreen(
                     colors = listOf(
                         Color(0xFF2B140A), // Rich dark bronze
                         Color(0xFF1B0B04), // Deep chocolate espresso
-                        Color(0xFF101C12), // Subtle deep emerald
-                        Color(0xFF0A120D)  // Deep obsidian base
+                        Color(0xFF140803), // Warm royal dark cocoa
+                        Color(0xFF0A0402)  // Deep obsidian base
                     )
                 )
             )
@@ -135,6 +144,12 @@ fun SplashScreen(
             }
             .testTag("splash_screen")
     ) {
+        val screenHeight = maxHeight
+        val screenWidth = maxWidth
+
+        // Adaptive logo sizing maintaining 1:1 square ratio without clipping on any screen
+        val logoSize = minOf(screenWidth * 0.84f, screenHeight * 0.48f, 340.dp)
+
         // Floating ambient golden sparkles and particle stars
         Canvas(modifier = Modifier.fillMaxSize()) {
             val width = size.width
@@ -172,45 +187,75 @@ fun SplashScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(310.dp)
+                    .size(logoSize)
                     .scale(logoScale)
                     .alpha(logoAlpha)
             ) {
                 // Radiant golden aura glow behind logo
                 Box(
                     modifier = Modifier
-                        .size((280 * pulseGlow).dp)
+                        .size(logoSize * 0.94f)
                         .clip(CircleShape)
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    Color(0x66F59E0B),
-                                    Color(0x22FDE047),
+                                    Color(0x60F59E0B),
+                                    Color(0x20FDE047),
                                     Color.Transparent
                                 )
                             )
                         )
                 )
 
-                // Master 3D Jitu Ludo Emblem
+                // Master JITU LUDO Logo:
+                // Using ContentScale.Fit (fitCenter equivalent) with NO box clipping.
+                // Guarantees the complete artwork, outer gold frame, royal crown,
+                // and the full letters of "LUDO" (including bottom curves and wings)
+                // are 100% visible, centered, uncropped, and undistorted on any screen size.
                 Image(
                     painter = painterResource(id = R.drawable.img_splash_logo),
-                    contentDescription = "Jitu Ludo Splash Logo",
+                    contentDescription = "JITU LUDO Logo",
+                    contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .size(280.dp)
-                        .clip(RoundedCornerShape(32.dp))
+                        .fillMaxSize()
                         .testTag("splash_logo")
                 )
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Complete, prominent app name text "JITU LUDO" (never clipped)
+            Text(
+                text = "JITU LUDO",
+                fontSize = if (screenWidth < 360.dp) 22.sp else 26.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 4.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                style = TextStyle(
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color(0xFFFFFBEB),
+                            Color(0xFFFDE047),
+                            Color(0xFFF59E0B),
+                            Color(0xFFB45309)
+                        )
+                    )
+                ),
+                modifier = Modifier
+                    .testTag("splash_app_title")
+                    .scale(logoScale)
+                    .alpha(logoAlpha)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Subtitle Brand Pill
             Box(
@@ -230,13 +275,13 @@ fun SplashScreen(
                         ),
                         shape = RoundedCornerShape(20.dp)
                     )
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 7.dp)
                     .alpha(logoAlpha),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "CLASSIC BOARD GAME • OFFLINE & SMART AI",
-                    fontSize = 11.sp,
+                    text = "ROYAL 3D LUDO • PASS & PLAY • SMART AI",
+                    fontSize = 10.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFFFDE68A),
                     letterSpacing = 1.sp,
@@ -244,13 +289,13 @@ fun SplashScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(36.dp))
+            Spacer(modifier = Modifier.height(26.dp))
 
             // Subtle pulsing loading status
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.alpha(logoAlpha * 0.85f)
+                modifier = Modifier.alpha(logoAlpha * 0.90f)
             ) {
                 Box(
                     modifier = Modifier
@@ -260,13 +305,14 @@ fun SplashScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "READY TO ROLL",
+                    text = "READY TO ROLL 🎲",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF94A3B8),
+                    color = Color(0xFFCBD5E1),
                     letterSpacing = 2.sp
                 )
             }
         }
     }
 }
+

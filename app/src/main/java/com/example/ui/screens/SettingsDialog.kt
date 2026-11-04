@@ -83,7 +83,9 @@ fun SettingsDialog(
     soundVolume: Float = 1.0f,
     talkingTokensEnabled: Boolean = true,
     animatedBackground: AnimatedBackground = AnimatedBackground.ROYAL_PALACE,
+    startupMusicEnabled: Boolean = true,
     onToggleSound: () -> Unit,
+    onToggleStartupMusic: (() -> Unit)? = null,
     onToggleHaptics: () -> Unit,
     onSetAnimationSpeed: (AnimationSpeed) -> Unit,
     onSetAiDifficulty: ((AiDifficulty) -> Unit)? = null,
@@ -230,6 +232,20 @@ fun SettingsDialog(
                             onToggle = onToggleSound,
                             testTag = "settings_sound_switch"
                         )
+
+                        // Menu Background Music Switch (Separate control for home menu music)
+                        if (onToggleStartupMusic != null) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsToggleRow(
+                                icon = Icons.Default.MusicNote,
+                                iconTint = Color(0xFFFDE047),
+                                title = "Menu Music",
+                                subtitle = "Play pleasant instrumental music on home menu",
+                                checked = startupMusicEnabled,
+                                onToggle = onToggleStartupMusic,
+                                testTag = "settings_startup_music_switch"
+                            )
+                        }
 
                         // Sound Volume Slider
                         if (onSetSoundVolume != null) {

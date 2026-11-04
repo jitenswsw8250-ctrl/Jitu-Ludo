@@ -15,6 +15,8 @@ class SettingsRepository(context: Context) {
 
     companion object {
         private const val KEY_SOUND_ENABLED = "pref_sound_enabled"
+        private const val KEY_MUSIC_ENABLED = "pref_menu_music_enabled"
+        private const val KEY_STARTUP_MUSIC_ENABLED = "pref_startup_music_enabled"
         private const val KEY_HAPTICS_ENABLED = "pref_haptics_enabled"
         private const val KEY_ANIMATION_SPEED = "pref_animation_speed"
         private const val KEY_SELECTED_SKIN = "pref_selected_skin"
@@ -27,6 +29,22 @@ class SettingsRepository(context: Context) {
         private const val PREFIX_PLAYER_NAME = "pref_player_name_"
         private const val PREFIX_PLAYER_AVATAR = "pref_player_avatar_"
     }
+
+    fun isMusicEnabled(): Boolean {
+        // Defaults to true, or migrates from prior startup music preference if present
+        return prefs.getBoolean(KEY_MUSIC_ENABLED, prefs.getBoolean(KEY_STARTUP_MUSIC_ENABLED, true))
+    }
+
+    fun setMusicEnabled(enabled: Boolean) {
+        prefs.edit()
+            .putBoolean(KEY_MUSIC_ENABLED, enabled)
+            .putBoolean(KEY_STARTUP_MUSIC_ENABLED, enabled)
+            .apply()
+    }
+
+    fun isStartupMusicEnabled(): Boolean = isMusicEnabled()
+
+    fun setStartupMusicEnabled(enabled: Boolean) = setMusicEnabled(enabled)
 
     fun isSoundEnabled(): Boolean {
         return prefs.getBoolean(KEY_SOUND_ENABLED, true)
@@ -135,6 +153,8 @@ class SettingsRepository(context: Context) {
     fun resetToDefaults() {
         prefs.edit()
             .putBoolean(KEY_SOUND_ENABLED, true)
+            .putBoolean(KEY_MUSIC_ENABLED, true)
+            .putBoolean(KEY_STARTUP_MUSIC_ENABLED, true)
             .putBoolean(KEY_HAPTICS_ENABLED, true)
             .putString(KEY_ANIMATION_SPEED, AnimationSpeed.NORMAL.name)
             .putString(KEY_SELECTED_SKIN, GameSkin.CLASSIC.name)

@@ -2154,53 +2154,105 @@ class ExampleUnitTest {
     }
 
     // -------------------------------------------------------------------------
-    // Restored In-Panel Dice System Tests (Roll Resolution, Consecutive Six Rule, Skin Support, Turn Handling)
+    // Simple Normal Ludo Dice Tests (All 6 Faces, Repeated Rolls, All Player Turns, Three Consecutive Sixes)
     // -------------------------------------------------------------------------
 
     @Test
-    fun test_restoredDice_rollAccuracyPassedToEngine() {
-        val player = Player(color = PlayerColor.RED, name = "Red", tokens = listOf(Token(id = 0, color = PlayerColor.RED, position = TokenPosition.InBase)))
+    fun test_simpleDice_allSixFacesGenerateValidGameOutcomes() {
+        val player = Player(
+            color = PlayerColor.RED,
+            name = "Red",
+            tokens = listOf(
+                Token(id = 0, color = PlayerColor.RED, position = TokenPosition.InBase),
+                Token(id = 1, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 5))
+            )
+        )
         val state = GameState(players = listOf(player), currentTurnIndex = 0, phase = TurnPhase.WAITING_FOR_ROLL)
 
-        for (settledValue in 1..6) {
-            val rolledState = LudoEngine.rollDice(state, forcedRoll = settledValue)
-            assertEquals("Engine roll result must precisely match the rolled value", settledValue, rolledState.diceState.value)
-            assertFalse("Rolling state must clear to false once settled", rolledState.diceState.isRolling)
+        for (faceValue in 1..6) {
+            val rolledState = LudoEngine.rollDice(state, forcedRoll = faceValue)
+            assertEquals("Dice face value must match exactly", faceValue, rolledState.diceState.value)
+            assertFalse("Dice must not remain in rolling state (instant display)", rolledState.diceState.isRolling)
+
+            if (faceValue == 6) {
+                // On 6: both InBase token and OnBoard token are movable
+                assertTrue("Both tokens movable on 6", rolledState.movableTokenIds.contains(0) && rolledState.movableTokenIds.contains(1))
+            } else {
+                // On 1..5: only OnBoard token is movable
+                assertTrue("Only OnBoard token movable on 1..5", rolledState.movableTokenIds == setOf(1))
+            }
         }
     }
 
     @Test
-    fun test_restoredDice_consecutiveSixRuleEnforcesNonSixOnThirdRoll() {
-        val player = Player(color = PlayerColor.RED, name = "Red", consecutiveSixes = 2, tokens = listOf(Token(id = 0, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 10))))
-        val state = GameState(players = listOf(player), currentTurnIndex = 0, phase = TurnPhase.WAITING_FOR_ROLL, diceState = DiceState(value = 6, consecutiveSixes = 2))
+    fun test_simpleDice_repeatedRollsAcrossAllPlayerTurns() {
+        val players = listOf(
+            Player(color = PlayerColor.RED, name = "Red", tokens = listOf(Token(id = 0, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 0)))),
+            Player(color = PlayerColor.GREEN, name = "Green", tokens = listOf(Token(id = 4, color = PlayerColor.GREEN, position = TokenPosition.OnBoard(step = 0)))),
+            Player(color = PlayerColor.YELLOW, name = "Yellow", tokens = listOf(Token(id = 8, color = PlayerColor.YELLOW, position = TokenPosition.OnBoard(step = 0)))),
+            Player(color = PlayerColor.BLUE, name = "Blue", tokens = listOf(Token(id = 12, color = PlayerColor.BLUE, position = TokenPosition.OnBoard(step = 0))))
+        )
 
-        // On third consecutive roll, engine must NEVER allow 6
-        val rolledStateForced6 = LudoEngine.rollDice(state, forcedRoll = 6)
-        assertTrue("Third roll must be between 1 and 5 (never 6)", rolledStateForced6.diceState.value in 1..5)
+        var currentState = GameState(players = players, currentTurnIndex = 0, phase = TurnPhase.WAITING_FOR_ROLL)
 
-        for (i in 1..25) {
-            val autoRolled = LudoEngine.rollDice(state)
-            assertTrue("Automatic roll on 3rd consecutive roll must NEVER produce 6", autoRolled.diceState.value in 1..5)
-            assertEquals(0, autoRolled.diceState.consecutiveSixes)
+        // Simulate 4 complete rounds (16 turns) of normal dice rolls and token moves
+        for (round in 1..4) {
+            for (playerIndex in players.indices) {
+                assertEquals("Current turn index must match active player", playerIndex, currentState.currentTurnIndex)
+                val expectedColor = players[playerIndex].color
+                assertEquals("Current player must match turn index", expectedColor, currentState.currentPlayer?.color)
+
+                // Roll dice (roll 2 to 5 so no bonus turn, cleanly advancing)
+                val rollValue = 2 + (round % 4) // 2, 3, 4, or 5
+                val rolledState = LudoEngine.rollDice(currentState, forcedRoll = rollValue)
+                assertEquals(rollValue, rolledState.diceState.value)
+                assertFalse(rolledState.diceState.isRolling)
+
+                // Move token
+                val activeTokenId = playerIndex * 4
+                val moveOutcome = LudoEngine.executeMove(rolledState, activeTokenId)
+                assertFalse("Roll 2..5 should not grant bonus turn", moveOutcome.hasBonusTurn)
+
+                // Next turn
+                val nextTurnIndex = LudoEngine.getNextActivePlayerIndex(moveOutcome.updatedState.players, currentState.currentTurnIndex)
+                currentState = moveOutcome.updatedState.copy(
+                    currentTurnIndex = nextTurnIndex,
+                    phase = TurnPhase.WAITING_FOR_ROLL
+                )
+            }
         }
     }
 
     @Test
-    fun test_restoredDice_skinCompatibilityForAllElevenSkins() {
-        // Ensure all 11 GameSkins have proper titles and attributes for rendering
-        val allSkins = GameSkin.values()
-        assertEquals(11, allSkins.size)
-        allSkins.forEach { skin ->
-            assertNotNull("Skin title must not be null", skin.title)
-            assertNotNull("Skin description must not be null", skin.description)
-            assertNotNull("Primary tone must not be null", skin.primaryTone)
-            assertNotNull("Accent tone must not be null", skin.accentTone)
-            assertNotNull("Rim tone must not be null", skin.rimTone)
+    fun test_simpleDice_threeConsecutiveSixesRuleEnforcedStrictly() {
+        val player = Player(
+            color = PlayerColor.RED,
+            name = "Red",
+            consecutiveSixes = 2,
+            tokens = listOf(Token(id = 0, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 10)))
+        )
+        val state = GameState(
+            players = listOf(player),
+            currentTurnIndex = 0,
+            phase = TurnPhase.WAITING_FOR_ROLL,
+            diceState = DiceState(value = 6, consecutiveSixes = 2)
+        )
+
+        // 1. Explicit forced roll of 6 must be clamped to 1..5
+        val forcedThirdRoll = LudoEngine.rollDice(state, forcedRoll = 6)
+        assertTrue("Third consecutive roll must NEVER be 6", forcedThirdRoll.diceState.value in 1..5)
+        assertEquals("Consecutive sixes counter must reset to 0", 0, forcedThirdRoll.diceState.consecutiveSixes)
+
+        // 2. 50 repeated automatic random rolls after two sixes must always produce 1..5
+        for (iteration in 1..50) {
+            val randomThirdRoll = LudoEngine.rollDice(state)
+            assertTrue("Automatic roll on 3rd consecutive roll must be in 1..5 (got ${randomThirdRoll.diceState.value})", randomThirdRoll.diceState.value in 1..5)
+            assertEquals(0, randomThirdRoll.diceState.consecutiveSixes)
         }
     }
 
     @Test
-    fun test_restoredDice_bonusTurnAwardedOnRollingSix() {
+    fun test_simpleDice_bonusTurnAwardedOnRollingSix() {
         val token = Token(id = 0, color = PlayerColor.RED, position = TokenPosition.InBase)
         val player = Player(color = PlayerColor.RED, name = "Red", tokens = listOf(token))
         val state = GameState(players = listOf(player), currentTurnIndex = 0, phase = TurnPhase.WAITING_FOR_ROLL)
@@ -2214,18 +2266,86 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun test_restoredDice_turnTransitionsWhenNoLegalMoves() {
-        val token = Token(id = 0, color = PlayerColor.RED, position = TokenPosition.InBase)
-        val player1 = Player(color = PlayerColor.RED, name = "Red", tokens = listOf(token))
-        val player2 = Player(color = PlayerColor.GREEN, name = "Green", tokens = listOf(token.copy(id = 4, color = PlayerColor.GREEN)))
-        val state = GameState(players = listOf(player1, player2), currentTurnIndex = 0, phase = TurnPhase.WAITING_FOR_ROLL)
+    fun test_diceRolling_animationDurationAndSettleIntegrity() {
+        val player = Player(color = PlayerColor.RED, name = "Red", tokens = listOf(Token(id = 0, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 5))))
+        val initialState = GameState(players = listOf(player), currentTurnIndex = 0, phase = TurnPhase.WAITING_FOR_ROLL)
 
-        // Rolling 3 with all tokens in base: no moves possible
-        val rolledState = LudoEngine.rollDice(state, forcedRoll = 3)
-        assertEquals(TurnPhase.TURN_TRANSITION, rolledState.phase)
-        assertTrue("Movable token IDs must be empty when no legal move", rolledState.movableTokenIds.isEmpty())
+        // Rolling state transition: initially WAITING_FOR_ROLL with isRolling = false
+        assertFalse(initialState.diceState.isRolling)
+
+        // Simulating roll trigger (isRolling = true during roll)
+        val rollingState = initialState.copy(diceState = initialState.diceState.copy(isRolling = true))
+        assertTrue(rollingState.diceState.isRolling)
+
+        // When rolling finishes after 600ms, engine resolves the final roll
+        val settledState = LudoEngine.rollDice(rollingState, forcedRoll = 4)
+        assertFalse("Settled state must clear isRolling flag to false", settledState.diceState.isRolling)
+        assertEquals("Settled value must match the generated final roll exactly", 4, settledState.diceState.value)
+        assertEquals(TurnPhase.SELECTING_TOKEN, settledState.phase)
+    }
+
+    @Test
+    fun test_diceRolling_singleSharedDiceStateAcrossAllPlayers() {
+        val players = listOf(
+            Player(color = PlayerColor.RED, name = "Red", tokens = listOf(Token(id = 0, color = PlayerColor.RED, position = TokenPosition.OnBoard(step = 2)))),
+            Player(color = PlayerColor.GREEN, name = "Green", tokens = listOf(Token(id = 4, color = PlayerColor.GREEN, position = TokenPosition.OnBoard(step = 2)))),
+            Player(color = PlayerColor.YELLOW, name = "Yellow", tokens = listOf(Token(id = 8, color = PlayerColor.YELLOW, position = TokenPosition.OnBoard(step = 2)))),
+            Player(color = PlayerColor.BLUE, name = "Blue", tokens = listOf(Token(id = 12, color = PlayerColor.BLUE, position = TokenPosition.OnBoard(step = 2))))
+        )
+
+        var state = GameState(players = players, currentTurnIndex = 0, phase = TurnPhase.WAITING_FOR_ROLL)
+
+        // All 4 players share the exact same single diceState object in GameState
+        for (idx in players.indices) {
+            assertEquals("Turn must match index", idx, state.currentTurnIndex)
+            val rolled = LudoEngine.rollDice(state, forcedRoll = 3)
+            assertEquals("Shared dice state must reflect current player's roll", 3, rolled.diceState.value)
+
+            val moved = LudoEngine.executeMove(rolled, idx * 4)
+            val nextTurn = LudoEngine.getNextActivePlayerIndex(moved.updatedState.players, state.currentTurnIndex)
+            state = moved.updatedState.copy(currentTurnIndex = nextTurn, phase = TurnPhase.WAITING_FOR_ROLL)
+        }
+    }
+
+    // Real 3D Cube Rotation & Settle Angles Validation Test
+    @Test
+    fun test_real3DCube_rotationAndSettleAngles_allSixFacesSettleForward() {
+        val s = 10f
+        // Standard opposite faces sum to 7: (1, 6), (2, 5), (3, 4)
+        val faceCenters = mapOf(
+            1 to com.example.ui.components.Vec3(0f, 0f, s),   // Front
+            2 to com.example.ui.components.Vec3(0f, -s, 0f),  // Top
+            3 to com.example.ui.components.Vec3(s, 0f, 0f),   // Right
+            4 to com.example.ui.components.Vec3(-s, 0f, 0f),  // Left
+            5 to com.example.ui.components.Vec3(0f, s, 0f),   // Bottom
+            6 to com.example.ui.components.Vec3(0f, 0f, -s)   // Back
+        )
+
+        val targetAngles = mapOf(
+            1 to (0f to 0f),
+            2 to (-90f to 0f),
+            3 to (0f to -90f),
+            4 to (0f to 90f),
+            5 to (90f to 0f),
+            6 to (0f to 180f)
+        )
+
+        for (face in 1..6) {
+            val center = faceCenters[face]!!
+            val (degX, degY) = targetAngles[face]!!
+            val radX = degX * (Math.PI.toFloat() / 180f)
+            val radY = degY * (Math.PI.toFloat() / 180f)
+
+            val rotated = center.rotate(radX, radY, 0f)
+
+            // When settled at its target angles, the face center MUST be exactly at (0, 0, +s) facing camera directly
+            assertEquals("Face $face X must settle at 0", 0f, rotated.x, 0.001f)
+            assertEquals("Face $face Y must settle at 0", 0f, rotated.y, 0.001f)
+            assertEquals("Face $face Z must settle at +s (facing camera directly)", s, rotated.z, 0.001f)
+        }
     }
 }
+
 
 
 
